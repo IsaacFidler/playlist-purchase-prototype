@@ -322,11 +322,11 @@ const formattedTotalCost = formatCurrency(totalCost)
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-12">Select</TableHead>
-                  <TableHead>Track</TableHead>
-                  <TableHead>Artist</TableHead>
-                  <TableHead>Album</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Vendor Links</TableHead>
+                  <TableHead className="w-[30%] min-w-[220px]">Track</TableHead>
+                  <TableHead className="w-[18%] min-w-[160px]">Artist</TableHead>
+                  <TableHead className="w-[22%] min-w-[180px]">Album</TableHead>
+                  <TableHead className="w-[80px]">Duration</TableHead>
+                  <TableHead className="min-w-[240px]">Vendor Links</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -338,11 +338,17 @@ const formattedTotalCost = formatCurrency(totalCost)
                         onCheckedChange={() => toggleTrackSelection(track.id)}
                       />
                     </TableCell>
-                    <TableCell className="font-medium">{track.name}</TableCell>
-                    <TableCell>{track.artist}</TableCell>
-                    <TableCell className="text-muted-foreground">{track.album}</TableCell>
+                    <TableCell className="font-medium max-w-[260px] truncate" title={track.name}>
+                      {track.name}
+                    </TableCell>
+                    <TableCell className="max-w-[200px] truncate" title={track.artist}>
+                      {track.artist}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[240px] truncate" title={track.album}>
+                      {track.album}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{track.duration}</TableCell>
-                    <TableCell>
+                    <TableCell className="max-w-[320px]">
                       <div className="flex flex-wrap gap-2">
                         {track.vendors.map((vendor) => (
                           <div key={`${vendor.name}-${vendor.url}`} className="flex items-center gap-1">
@@ -350,7 +356,7 @@ const formattedTotalCost = formatCurrency(totalCost)
                               <Badge
                                 variant="outline"
                                 className={cn(
-                                  "border border-border/40 bg-secondary/10 text-secondary-foreground",
+                                  "border border-border/40 bg-secondary/10 text-secondary-foreground whitespace-normal break-words",
                                   getVendorBadgeClasses(vendor.name),
                                 )}
                               >
