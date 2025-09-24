@@ -96,7 +96,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto w-full max-w-4xl space-y-8">
       {/* Welcome Section */}
       <div className="space-y-4">
         <div>
@@ -115,8 +115,8 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid md:grid-cols-3 gap-6">
-        <Card className="border-border/50 bg-card/50 backdrop-blur">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <Card className="w-full border-border/50 bg-card/50 backdrop-blur">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Playlists</CardTitle>
           </CardHeader>
@@ -126,7 +126,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/50 bg-card/50 backdrop-blur">
+        <Card className="w-full border-border/50 bg-card/50 backdrop-blur">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Tracks Processed</CardTitle>
           </CardHeader>
@@ -136,7 +136,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/50 bg-card/50 backdrop-blur">
+        <Card className="w-full border-border/50 bg-card/50 backdrop-blur">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Purchase Links</CardTitle>
           </CardHeader>
@@ -148,7 +148,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent Activity */}
-      <Card className="border-border/50 bg-card/50 backdrop-blur">
+      <Card className="w-full border-border/50 bg-card/50 backdrop-blur">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Music className="h-5 w-5" />

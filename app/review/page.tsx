@@ -8,25 +8,42 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ArrowLeft, Download, ExternalLink, Music, AlertCircle } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ArrowLeft, Download, ExternalLink, Music, AlertCircle, ShoppingCart, Filter } from "lucide-react"
 
 interface Track {
   id: string
   name: string
   artist: string
   album: string
+  duration: string
+  spotifyId: string
   vendors: {
     name: string
     url: string
     price: string
     available: boolean
   }[]
+  selected?: boolean
+}
+
+interface PlaylistData {
+  url: string
+  name: string
+  description: string
+  trackCount: number
+  importedAt: string
+  tracks: Track[]
 }
 
 export default function ReviewPage() {
+  const [playlistData, setPlaylistData] = useState<PlaylistData | null>(null)
   const [tracks, setTracks] = useState<Track[]>([])
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [playlistName, setPlaylistName] = useState("Summer Vibes 2024")
+  const [selectedTracks, setSelectedTracks] = useState<Set<string>>(new Set())
+  const [vendorFilter, setVendorFilter] = useState<string>("all")
+  const [isProcessingPurchase, setIsProcessingPurchase] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -38,73 +55,81 @@ export default function ReviewPage() {
     }
     setIsAuthenticated(true)
 
-    // Mock track data
-    setTracks([
-      {
-        id: "1",
-        name: "Blinding Lights",
-        artist: "The Weeknd",
-        album: "After Hours",
-        vendors: [
-          { name: "Apple Music", url: "https://music.apple.com", price: "$1.29", available: true },
-          { name: "Bandcamp", url: "https://bandcamp.com", price: "$1.50", available: true },
-          { name: "Amazon Music", url: "https://amazon.com", price: "$1.29", available: false },
-        ],
-      },
-      {
-        id: "2",
-        name: "Watermelon Sugar",
-        artist: "Harry Styles",
-        album: "Fine Line",
-        vendors: [
-          { name: "Apple Music", url: "https://music.apple.com", price: "$1.29", available: true },
-          { name: "Bandcamp", url: "https://bandcamp.com", price: "$1.25", available: true },
-          { name: "Amazon Music", url: "https://amazon.com", price: "$1.29", available: true },
-        ],
-      },
-      {
-        id: "3",
-        name: "Levitating",
-        artist: "Dua Lipa",
-        album: "Future Nostalgia",
-        vendors: [
-          { name: "Apple Music", url: "https://music.apple.com", price: "$1.29", available: true },
-          { name: "Bandcamp", url: "https://bandcamp.com", price: "$1.40", available: false },
-          { name: "Amazon Music", url: "https://amazon.com", price: "$1.29", available: true },
-        ],
-      },
-      {
-        id: "4",
-        name: "Good 4 U",
-        artist: "Olivia Rodrigo",
-        album: "SOUR",
-        vendors: [
-          { name: "Apple Music", url: "https://music.apple.com", price: "$1.29", available: true },
-          { name: "Bandcamp", url: "https://bandcamp.com", price: "$1.35", available: true },
-          { name: "Amazon Music", url: "https://amazon.com", price: "$1.29", available: true },
-        ],
-      },
-      {
-        id: "5",
-        name: "Stay",
-        artist: "The Kid LAROI & Justin Bieber",
-        album: "F*CK LOVE 3: OVER YOU",
-        vendors: [
-          { name: "Apple Music", url: "https://music.apple.com", price: "$1.29", available: true },
-          { name: "Bandcamp", url: "https://bandcamp.com", price: "$1.45", available: true },
-          { name: "Amazon Music", url: "https://amazon.com", price: "$1.29", available: false },
-        ],
-      },
-    ])
+    // Load playlist data
+    const storedPlaylist = localStorage.getItem("current-playlist")
+    if (storedPlaylist) {
+      const data = JSON.parse(storedPlaylist) as PlaylistData
+      setPlaylistData(data)
+      setTracks(data.tracks)
+      // Select all tracks by default
+      setSelectedTracks(new Set(data.tracks.map((t) => t.id)))
+    }
   }, [router])
 
+  const toggleTrackSelection = (trackId: string) => {
+    const newSelected = new Set(selectedTracks)
+    if (newSelected.has(trackId)) {
+      newSelected.delete(trackId)
+    } else {
+      newSelected.add(trackId)
+    }
+    setSelectedTracks(newSelected)
+  }
+
+  const selectAllTracks = () => {
+    setSelectedTracks(new Set(tracks.map((t) => t.id)))
+  }
+
+  const deselectAllTracks = () => {
+    setSelectedTracks(new Set())
+  }
+
+  const filteredTracks = tracks.filter((track) => {
+    if (vendorFilter === "all") return true
+    return track.vendors.some(
+      (vendor) => vendor.name.toLowerCase().includes(vendorFilter.toLowerCase()) && vendor.available,
+    )
+  })
+
+  const selectedTracksList = tracks.filter((track) => selectedTracks.has(track.id))
+  const totalCost = selectedTracksList.reduce((sum, track) => {
+    const cheapestVendor = track.vendors
+      .filter((v) => v.available)
+      .sort((a, b) => Number.parseFloat(a.price.replace("$", "")) - Number.parseFloat(b.price.replace("$", "")))[0]
+    return sum + (cheapestVendor ? Number.parseFloat(cheapestVendor.price.replace("$", "")) : 0)
+  }, 0)
+
+  const handleBulkPurchase = async () => {
+    if (selectedTracks.size === 0) return
+
+    setIsProcessingPurchase(true)
+
+    // Store selected tracks for purchase page
+    const purchaseData = {
+      tracks: selectedTracksList,
+      totalCost,
+      playlistName: playlistData?.name || "Playlist",
+      timestamp: new Date().toISOString(),
+    }
+
+    localStorage.setItem("purchase-data", JSON.stringify(purchaseData))
+
+    // Simulate processing time
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+
+    router.push("/purchase")
+  }
+
   const handleExportCSV = () => {
+    if (!playlistData) return
+
     const csvContent = [
-      ["Track", "Artist", "Album", "Apple Music", "Bandcamp", "Amazon Music"],
-      ...tracks.map((track) => [
+      ["Track", "Artist", "Album", "Duration", "Apple Music", "Bandcamp", "Amazon Music"],
+      ...selectedTracksList.map((track) => [
         track.name,
         track.artist,
         track.album,
+        track.duration,
         track.vendors.find((v) => v.name === "Apple Music")?.available
           ? track.vendors.find((v) => v.name === "Apple Music")?.url || ""
           : "",
@@ -123,7 +148,7 @@ export default function ReviewPage() {
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `${playlistName.replace(/\s+/g, "_")}_purchase_links.csv`
+    a.download = `${playlistData.name.replace(/\s+/g, "_")}_purchase_links.csv`
     a.click()
     window.URL.revokeObjectURL(url)
   }
@@ -139,9 +164,9 @@ export default function ReviewPage() {
     )
   }
 
-  if (tracks.length === 0) {
+  if (!playlistData || tracks.length === 0) {
     return (
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="mx-auto w-full max-w-4xl space-y-8">
         <div className="space-y-4">
           <Link
             href="/import"
@@ -152,20 +177,20 @@ export default function ReviewPage() {
           </Link>
           <div>
             <h1 className="text-3xl font-bold text-balance">Review Playlist</h1>
-            <p className="text-muted-foreground text-lg">No tracks found in your playlist</p>
+            <p className="text-muted-foreground text-lg">No playlist data found</p>
           </div>
         </div>
 
         <Alert>
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>No tracks found. Try importing again with a valid Spotify playlist URL.</AlertDescription>
+          <AlertDescription>No playlist found. Please import a playlist first.</AlertDescription>
         </Alert>
       </div>
     )
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="mx-auto w-full max-w-4xl space-y-8">
       {/* Header */}
       <div className="space-y-4">
         <Link
@@ -179,19 +204,62 @@ export default function ReviewPage() {
           <div>
             <h1 className="text-3xl font-bold text-balance">Review Playlist</h1>
             <p className="text-muted-foreground text-lg">
-              {playlistName} • {tracks.length} tracks
+              {playlistData.name} • {tracks.length} tracks • {selectedTracks.size} selected
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={handleExportCSV}>
+            <Button variant="outline" onClick={handleExportCSV} disabled={selectedTracks.size === 0}>
               <Download className="mr-2 h-4 w-4" />
-              Export CSV
+              Export Selected
             </Button>
-            <Button disabled>
-              <ExternalLink className="mr-2 h-4 w-4" />
-              Open All Links
+            <Button
+              onClick={handleBulkPurchase}
+              disabled={selectedTracks.size === 0 || isProcessingPurchase}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {isProcessingPurchase ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  Purchase Selected (${totalCost.toFixed(2)})
+                </>
+              )}
             </Button>
           </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={selectAllTracks}>
+              Select All
+            </Button>
+            <Button variant="outline" size="sm" onClick={deselectAllTracks}>
+              Deselect All
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Select value={vendorFilter} onValueChange={setVendorFilter}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Filter by vendor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Vendors</SelectItem>
+                <SelectItem value="apple">Apple Music</SelectItem>
+                <SelectItem value="bandcamp">Bandcamp</SelectItem>
+                <SelectItem value="amazon">Amazon Music</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="text-sm text-muted-foreground">
+          {selectedTracks.size} of {tracks.length} tracks selected
         </div>
       </div>
 
@@ -202,25 +270,34 @@ export default function ReviewPage() {
             <Music className="h-5 w-5" />
             Track Purchase Links
           </CardTitle>
-          <CardDescription>Review all tracks and their available purchase options</CardDescription>
+          <CardDescription>Select tracks and review their available purchase options</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">Select</TableHead>
                   <TableHead>Track</TableHead>
                   <TableHead>Artist</TableHead>
                   <TableHead>Album</TableHead>
+                  <TableHead>Duration</TableHead>
                   <TableHead>Vendor Links</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {tracks.map((track) => (
+                {filteredTracks.map((track) => (
                   <TableRow key={track.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedTracks.has(track.id)}
+                        onCheckedChange={() => toggleTrackSelection(track.id)}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{track.name}</TableCell>
                     <TableCell>{track.artist}</TableCell>
                     <TableCell className="text-muted-foreground">{track.album}</TableCell>
+                    <TableCell className="text-muted-foreground">{track.duration}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-2">
                         {track.vendors.map((vendor) => (
@@ -255,7 +332,7 @@ export default function ReviewPage() {
       </Card>
 
       {/* Summary */}
-      <div className="grid md:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-4 gap-6">
         <Card className="border-border/50 bg-card/50 backdrop-blur">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Tracks</CardTitle>
@@ -267,22 +344,31 @@ export default function ReviewPage() {
 
         <Card className="border-border/50 bg-card/50 backdrop-blur">
           <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Selected</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{selectedTracks.size}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50 bg-card/50 backdrop-blur">
+          <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Available Links</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {tracks.reduce((acc, track) => acc + track.vendors.filter((v) => v.available).length, 0)}
+              {selectedTracksList.reduce((acc, track) => acc + track.vendors.filter((v) => v.available).length, 0)}
             </div>
           </CardContent>
         </Card>
 
         <Card className="border-border/50 bg-card/50 backdrop-blur">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Est. Total Cost</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Cost</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$6.45</div>
-            <p className="text-xs text-muted-foreground">Average price per track</p>
+            <div className="text-2xl font-bold">${totalCost.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Selected tracks</p>
           </CardContent>
         </Card>
       </div>

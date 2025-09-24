@@ -9,12 +9,22 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ArrowLeft, Music } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ArrowLeft, Music, CheckCircle, AlertCircle } from "lucide-react"
+
+interface ImportProgress {
+  step: string
+  progress: number
+  message: string
+}
 
 export default function ImportPage() {
   const [playlistUrl, setPlaylistUrl] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [importProgress, setImportProgress] = useState<ImportProgress | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -27,16 +37,107 @@ export default function ImportPage() {
     setIsAuthenticated(true)
   }, [router])
 
+  const isValidSpotifyUrl = (url: string) => {
+    const spotifyRegex = /^https:\/\/open\.spotify\.com\/playlist\/[a-zA-Z0-9]+(\?.*)?$/
+    return spotifyRegex.test(url)
+  }
+
   const handleImport = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
+
+    if (!isValidSpotifyUrl(playlistUrl)) {
+      setError("Please enter a valid Spotify playlist URL")
+      return
+    }
+
     setIsLoading(true)
 
-    // Simulate API call to import playlist
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    try {
+      // Step 1: Extract playlist ID and fetch metadata
+      setImportProgress({ step: "extracting", progress: 20, message: "Extracting playlist information..." })
+      await new Promise((resolve) => setTimeout(resolve, 1500))
 
-    setIsLoading(false)
-    // Redirect to review page with stub data
-    router.push("/review")
+      // Step 2: Fetch track list
+      setImportProgress({ step: "fetching", progress: 50, message: "Fetching track list..." })
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      // Step 3: Search marketplaces
+      setImportProgress({ step: "searching", progress: 80, message: "Searching marketplaces for purchase links..." })
+      await new Promise((resolve) => setTimeout(resolve, 2500))
+
+      // Step 4: Complete
+      setImportProgress({ step: "complete", progress: 100, message: "Import complete!" })
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      // Store playlist data for review page
+      const playlistData = {
+        url: playlistUrl,
+        name: "Summer Vibes 2024", // Would be extracted from Spotify API
+        description: "The perfect soundtrack for summer days",
+        trackCount: 25,
+        importedAt: new Date().toISOString(),
+        tracks: [
+          {
+            id: "1",
+            name: "Blinding Lights",
+            artist: "The Weeknd",
+            album: "After Hours",
+            duration: "3:20",
+            spotifyId: "0VjIjW4GlUZAMYd2vXMi3b",
+            vendors: [
+              {
+                name: "Apple Music",
+                url: "https://music.apple.com/us/album/blinding-lights/1499378108?i=1499378112",
+                price: "$1.29",
+                available: true,
+              },
+              {
+                name: "Bandcamp",
+                url: "https://theweeknd.bandcamp.com/track/blinding-lights",
+                price: "$1.50",
+                available: true,
+              },
+              { name: "Amazon Music", url: "https://amazon.com/dp/B084DWCZQZ", price: "$1.29", available: false },
+            ],
+          },
+          {
+            id: "2",
+            name: "Watermelon Sugar",
+            artist: "Harry Styles",
+            album: "Fine Line",
+            duration: "2:54",
+            spotifyId: "6UelLqGlWMcVH1E5c4H7lY",
+            vendors: [
+              {
+                name: "Apple Music",
+                url: "https://music.apple.com/us/album/watermelon-sugar/1488408555?i=1488408564",
+                price: "$1.29",
+                available: true,
+              },
+              {
+                name: "Bandcamp",
+                url: "https://harrystyles.bandcamp.com/track/watermelon-sugar",
+                price: "$1.25",
+                available: true,
+              },
+              { name: "Amazon Music", url: "https://amazon.com/dp/B082ZR6GJL", price: "$1.29", available: true },
+            ],
+          },
+          // More tracks would be added here...
+        ],
+      }
+
+      localStorage.setItem("current-playlist", JSON.stringify(playlistData))
+
+      // Redirect to review page
+      router.push("/review")
+    } catch (err) {
+      setError("Failed to import playlist. Please try again.")
+      setImportProgress(null)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   if (!isAuthenticated) {
@@ -51,7 +152,7 @@ export default function ImportPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
+    <div className="mx-auto w-full max-w-4xl space-y-8">
       {/* Header */}
       <div className="space-y-4">
         <Link
@@ -66,6 +167,14 @@ export default function ImportPage() {
           <p className="text-muted-foreground text-lg">Paste your Spotify playlist URL to get started</p>
         </div>
       </div>
+
+      {/* Error Alert */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Import Form */}
       <Card className="border-border/50 bg-card/50 backdrop-blur">
@@ -89,9 +198,26 @@ export default function ImportPage() {
                 value={playlistUrl}
                 onChange={(e) => setPlaylistUrl(e.target.value)}
                 required
+                disabled={isLoading}
               />
               <p className="text-sm text-muted-foreground">Copy the playlist URL from Spotify and paste it here</p>
             </div>
+
+            {importProgress && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{importProgress.message}</span>
+                  <span className="font-medium">{importProgress.progress}%</span>
+                </div>
+                <Progress value={importProgress.progress} className="h-2" />
+                {importProgress.step === "complete" && (
+                  <div className="flex items-center gap-2 text-green-600">
+                    <CheckCircle className="h-4 w-4" />
+                    <span className="text-sm font-medium">Redirecting to review...</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <Button type="submit" className="w-full" disabled={isLoading || !playlistUrl}>
               {isLoading ? (

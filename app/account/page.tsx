@@ -70,7 +70,7 @@ export default function AccountPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="mx-auto w-full max-w-4xl space-y-8">
       {/* Header */}
       <div className="space-y-4">
         <Link

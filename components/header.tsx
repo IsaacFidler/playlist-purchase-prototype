@@ -2,14 +2,16 @@
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Music, Moon, Sun, User } from "lucide-react"
+import { Music, Moon, Sun, User, LogOut } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 
 export function Header() {
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
     setMounted(true)
@@ -18,10 +20,16 @@ export function Header() {
     setIsLoggedIn(!!session)
   }, [])
 
+  const handleLogout = () => {
+    localStorage.removeItem("playlist-session")
+    setIsLoggedIn(false)
+    router.push("/")
+  }
+
   if (!mounted) return null
 
   return (
-    <header className="border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 fixed top-0 left-0 right-0 z-50">
       <div className="max-w-6xl mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-semibold text-xl">
@@ -46,6 +54,10 @@ export function Header() {
                     <User className="h-4 w-4" />
                   </Button>
                 </Link>
+                <Button variant="ghost" size="icon" onClick={handleLogout}>
+                  <LogOut className="h-4 w-4" />
+                  <span className="sr-only">Logout</span>
+                </Button>
               </div>
             ) : (
               <div className="flex items-center gap-2">

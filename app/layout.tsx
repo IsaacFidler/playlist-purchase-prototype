@@ -4,6 +4,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Header } from "@/components/header"
+import { DynamicLayout } from "@/components/dynamic-layout"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -13,7 +14,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Playlist Purchase Prototype",
   description: "Turn your playlists into purchasable music collections",
-    generator: 'v0.app'
+  generator: "v0.app",
 }
 
 export default function RootLayout({
@@ -26,7 +27,7 @@ export default function RootLayout({
       <body className="min-h-screen gradient-bg">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
           <Header />
-          <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
+          <DynamicLayout>{children}</DynamicLayout>
         </ThemeProvider>
       </body>
     </html>
