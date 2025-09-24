@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 
+import { findITunesOffer, formatITunesPrice } from "@/lib/vendors/apple"
+
 const SPOTIFY_API_BASE = "https://api.spotify.com/v1"
 
 type SpotifyPlaylistResponse = {
@@ -20,6 +22,7 @@ type SpotifyPlaylistTrack = {
     artists: { name: string }[]
     album: { name: string } | null
     external_urls?: { spotify?: string }
+    external_ids?: { isrc?: string }
   } | null
 }
 
@@ -70,9 +73,12 @@ export async function POST(request: Request) {
       album: track.album?.name ?? null,
       duration: formatDuration(track.duration_ms),
       spotifyId: track.id,
+      isrc: track.external_ids?.isrc ?? null,
       vendors: [],
     }
   }).filter((track): track is NonNullable<typeof track> => Boolean(track))
+
+  await enrichWithITunesOffers(normalizedTracks)
 
   const payload = {
     url: playlistJson.external_urls?.spotify ?? playlistUrl,
@@ -84,6 +90,39 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json(payload)
+}
+
+async function enrichWithITunesOffers(
+  tracks: Array<{ name: string; artist: string; spotifyId?: string | null; isrc?: string | null; vendors: any[] }>,
+) {
+  const BATCH_SIZE = 10
+
+  for (let i = 0; i < tracks.length; i += BATCH_SIZE) {
+    const batch = tracks.slice(i, i + BATCH_SIZE)
+    await Promise.all(
+      batch.map(async (track) => {
+        try {
+          const artist = track.artist?.split(",")[0]?.trim()
+          const match = await findITunesOffer({
+            trackName: track.name,
+            artistName: artist,
+            isrc: track.isrc ?? undefined,
+          })
+
+          if (!match) return
+
+          track.vendors.push({
+            name: "Apple iTunes",
+            url: match.url,
+            price: formatITunesPrice(match),
+            available: true,
+          })
+        } catch (error) {
+          console.warn("Failed to enrich track with iTunes data", error)
+        }
+      }),
+    )
+  }
 }
 
 function extractPlaylistId(urlOrId: string) {
