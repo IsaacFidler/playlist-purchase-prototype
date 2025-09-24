@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -11,12 +11,22 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ArrowLeft, Music, CheckCircle, AlertCircle } from "lucide-react"
+import { ArrowLeft, Music, CheckCircle, AlertCircle, PlugZap } from "lucide-react"
+
+import { createSpotifyAuthorizeUrl } from "@/lib/spotify"
 
 interface ImportProgress {
   step: string
   progress: number
   message: string
+}
+
+interface SpotifyAuthPayload {
+  accessToken: string
+  refreshToken?: string
+  tokenType: string
+  expiresAt: number
+  scope: string
 }
 
 export default function ImportPage() {
@@ -25,6 +35,7 @@ export default function ImportPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [spotifyAuth, setSpotifyAuth] = useState<SpotifyAuthPayload | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -35,105 +46,108 @@ export default function ImportPage() {
       return
     }
     setIsAuthenticated(true)
+
+    const storedAuth = localStorage.getItem("spotify-auth")
+    if (storedAuth) {
+      try {
+        const parsed = JSON.parse(storedAuth) as SpotifyAuthPayload
+        if (parsed.expiresAt > Date.now()) {
+          setSpotifyAuth(parsed)
+        } else {
+          localStorage.removeItem("spotify-auth")
+        }
+      } catch (err) {
+        console.warn("Failed to parse stored Spotify session", err)
+        localStorage.removeItem("spotify-auth")
+      }
+    }
   }, [router])
+
+  const isSpotifyConnected = useMemo(() => {
+    return spotifyAuth ? spotifyAuth.expiresAt > Date.now() : false
+  }, [spotifyAuth])
+
+  const tokenExpiresInMinutes = useMemo(() => {
+    if (!spotifyAuth) return null
+    const diff = spotifyAuth.expiresAt - Date.now()
+    if (diff <= 0) return 0
+    return Math.round(diff / 60000)
+  }, [spotifyAuth])
 
   const isValidSpotifyUrl = (url: string) => {
     const spotifyRegex = /^https:\/\/open\.spotify\.com\/playlist\/[a-zA-Z0-9]+(\?.*)?$/
     return spotifyRegex.test(url)
   }
 
+  const handleConnectSpotify = async () => {
+    try {
+      const authorizeUrl = await createSpotifyAuthorizeUrl()
+      window.location.href = authorizeUrl
+    } catch (err) {
+      console.error(err)
+      setError("Spotify configuration is missing. Please check environment variables.")
+    }
+  }
+
   const handleImport = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setImportProgress(null)
 
     if (!isValidSpotifyUrl(playlistUrl)) {
       setError("Please enter a valid Spotify playlist URL")
       return
     }
 
+    if (!isSpotifyConnected || !spotifyAuth) {
+      setError("Connect your Spotify account before importing a playlist.")
+      return
+    }
+
+    if (spotifyAuth.expiresAt <= Date.now()) {
+      setSpotifyAuth(null)
+      localStorage.removeItem("spotify-auth")
+      setError("Your Spotify session has expired. Please reconnect and try again.")
+      return
+    }
+
     setIsLoading(true)
 
     try {
-      // Step 1: Extract playlist ID and fetch metadata
-      setImportProgress({ step: "extracting", progress: 20, message: "Extracting playlist information..." })
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      setImportProgress({ step: "extracting", progress: 15, message: "Extracting playlist details..." })
 
-      // Step 2: Fetch track list
-      setImportProgress({ step: "fetching", progress: 50, message: "Fetching track list..." })
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      const response = await fetch("/api/spotify/playlist", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ playlistUrl, accessToken: spotifyAuth.accessToken }),
+      })
 
-      // Step 3: Search marketplaces
-      setImportProgress({ step: "searching", progress: 80, message: "Searching marketplaces for purchase links..." })
-      await new Promise((resolve) => setTimeout(resolve, 2500))
-
-      // Step 4: Complete
-      setImportProgress({ step: "complete", progress: 100, message: "Import complete!" })
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Store playlist data for review page
-      const playlistData = {
-        url: playlistUrl,
-        name: "Summer Vibes 2024", // Would be extracted from Spotify API
-        description: "The perfect soundtrack for summer days",
-        trackCount: 25,
-        importedAt: new Date().toISOString(),
-        tracks: [
-          {
-            id: "1",
-            name: "Blinding Lights",
-            artist: "The Weeknd",
-            album: "After Hours",
-            duration: "3:20",
-            spotifyId: "0VjIjW4GlUZAMYd2vXMi3b",
-            vendors: [
-              {
-                name: "Apple Music",
-                url: "https://music.apple.com/us/album/blinding-lights/1499378108?i=1499378112",
-                price: "$1.29",
-                available: true,
-              },
-              {
-                name: "Bandcamp",
-                url: "https://theweeknd.bandcamp.com/track/blinding-lights",
-                price: "$1.50",
-                available: true,
-              },
-              { name: "Amazon Music", url: "https://amazon.com/dp/B084DWCZQZ", price: "$1.29", available: false },
-            ],
-          },
-          {
-            id: "2",
-            name: "Watermelon Sugar",
-            artist: "Harry Styles",
-            album: "Fine Line",
-            duration: "2:54",
-            spotifyId: "6UelLqGlWMcVH1E5c4H7lY",
-            vendors: [
-              {
-                name: "Apple Music",
-                url: "https://music.apple.com/us/album/watermelon-sugar/1488408555?i=1488408564",
-                price: "$1.29",
-                available: true,
-              },
-              {
-                name: "Bandcamp",
-                url: "https://harrystyles.bandcamp.com/track/watermelon-sugar",
-                price: "$1.25",
-                available: true,
-              },
-              { name: "Amazon Music", url: "https://amazon.com/dp/B082ZR6GJL", price: "$1.29", available: true },
-            ],
-          },
-          // More tracks would be added here...
-        ],
+      if (response.status === 401) {
+        localStorage.removeItem("spotify-auth")
+        setSpotifyAuth(null)
+        throw new Error("Spotify session expired. Please reconnect and try again.")
       }
 
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error ?? "Unable to fetch playlist from Spotify.")
+      }
+
+      setImportProgress({ step: "processing", progress: 55, message: "Processing tracks..." })
+
+      const playlistData = await response.json()
+
+      setImportProgress({ step: "complete", progress: 100, message: "Import complete!" })
       localStorage.setItem("current-playlist", JSON.stringify(playlistData))
 
-      // Redirect to review page
-      router.push("/review")
+      setTimeout(() => {
+        router.push("/review")
+      }, 600)
     } catch (err) {
-      setError("Failed to import playlist. Please try again.")
+      console.error(err)
+      setError(err instanceof Error ? err.message : "Failed to import playlist. Please try again.")
       setImportProgress(null)
     } finally {
       setIsLoading(false)
@@ -165,6 +179,28 @@ export default function ImportPage() {
         <div>
           <h1 className="text-3xl font-bold text-balance">Import Playlist</h1>
           <p className="text-muted-foreground text-lg">Paste your Spotify playlist URL to get started</p>
+        </div>
+        <div className="flex flex-col gap-3 rounded-lg border border-border/40 bg-muted/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="rounded-full bg-primary/10 p-2 text-primary">
+              <PlugZap className="h-5 w-5" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium">
+                {isSpotifyConnected ? "Spotify connected" : "Connect your Spotify account"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {isSpotifyConnected
+                  ? tokenExpiresInMinutes !== null
+                    ? `Access token expires in ~${tokenExpiresInMinutes} minute${tokenExpiresInMinutes === 1 ? "" : "s"}.`
+                    : "Access token active."
+                  : "We use Spotify to read playlist tracks securely."}
+              </p>
+            </div>
+          </div>
+          <Button variant={isSpotifyConnected ? "outline" : "default"} onClick={handleConnectSpotify} disabled={isLoading}>
+            {isSpotifyConnected ? "Reconnect Spotify" : "Connect Spotify"}
+          </Button>
         </div>
       </div>
 
