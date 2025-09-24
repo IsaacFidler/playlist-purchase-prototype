@@ -29,6 +29,24 @@ interface SpotifyAuthPayload {
   scope: string
 }
 
+const TOKEN_EXPIRY_BUFFER_MS = 60 * 1000
+
+function loadSpotifyAuth(): SpotifyAuthPayload | null {
+  const storedAuth = typeof window !== "undefined" ? localStorage.getItem("spotify-auth") : null
+  if (!storedAuth) return null
+  try {
+    return JSON.parse(storedAuth) as SpotifyAuthPayload
+  } catch (error) {
+    console.warn("Failed to parse stored Spotify session", error)
+    localStorage.removeItem("spotify-auth")
+    return null
+  }
+}
+
+function persistSpotifyAuth(payload: SpotifyAuthPayload) {
+  localStorage.setItem("spotify-auth", JSON.stringify(payload))
+}
+
 export default function ImportPage() {
   const [playlistUrl, setPlaylistUrl] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -47,17 +65,18 @@ export default function ImportPage() {
     }
     setIsAuthenticated(true)
 
-    const storedAuth = localStorage.getItem("spotify-auth")
+    const storedAuth = loadSpotifyAuth()
     if (storedAuth) {
-      try {
-        const parsed = JSON.parse(storedAuth) as SpotifyAuthPayload
-        if (parsed.expiresAt > Date.now()) {
-          setSpotifyAuth(parsed)
-        } else {
-          localStorage.removeItem("spotify-auth")
-        }
-      } catch (err) {
-        console.warn("Failed to parse stored Spotify session", err)
+      if (storedAuth.expiresAt <= Date.now() + TOKEN_EXPIRY_BUFFER_MS && storedAuth.refreshToken) {
+        refreshSpotifyAccessToken(storedAuth.refreshToken, storedAuth)
+          .then((updated) => setSpotifyAuth(updated))
+          .catch((error) => {
+            console.error("Failed to refresh Spotify token", error)
+            localStorage.removeItem("spotify-auth")
+          })
+      } else if (storedAuth.expiresAt > Date.now()) {
+        setSpotifyAuth(storedAuth)
+      } else {
         localStorage.removeItem("spotify-auth")
       }
     }
@@ -104,11 +123,28 @@ export default function ImportPage() {
       return
     }
 
-    if (spotifyAuth.expiresAt <= Date.now()) {
-      setSpotifyAuth(null)
-      localStorage.removeItem("spotify-auth")
-      setError("Your Spotify session has expired. Please reconnect and try again.")
-      return
+    let activeAuth = spotifyAuth
+
+    if (spotifyAuth.expiresAt <= Date.now() + TOKEN_EXPIRY_BUFFER_MS) {
+      if (!spotifyAuth.refreshToken) {
+        setSpotifyAuth(null)
+        localStorage.removeItem("spotify-auth")
+        setError("Your Spotify session expired and cannot be refreshed. Please reconnect.")
+        return
+      }
+
+      try {
+        setImportProgress({ step: "refreshing", progress: 10, message: "Refreshing Spotify session..." })
+        activeAuth = await refreshSpotifyAccessToken(spotifyAuth.refreshToken, spotifyAuth)
+        setSpotifyAuth(activeAuth)
+      } catch (err) {
+        console.error(err)
+        setSpotifyAuth(null)
+        localStorage.removeItem("spotify-auth")
+        setError(err instanceof Error ? err.message : "Unable to refresh Spotify session.")
+        setImportProgress(null)
+        return
+      }
     }
 
     setIsLoading(true)
@@ -121,7 +157,7 @@ export default function ImportPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ playlistUrl, accessToken: spotifyAuth.accessToken }),
+        body: JSON.stringify({ playlistUrl, accessToken: activeAuth.accessToken }),
       })
 
       if (response.status === 401) {
@@ -339,4 +375,36 @@ export default function ImportPage() {
       </Card>
     </div>
   )
+}
+
+async function refreshSpotifyAccessToken(refreshToken: string, currentAuth: SpotifyAuthPayload) {
+  const response = await fetch("/api/auth/refresh", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ refreshToken }),
+  })
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data.error ?? "Failed to refresh Spotify token.")
+  }
+
+  const data = await response.json()
+
+  const updatedAuth: SpotifyAuthPayload = {
+    ...currentAuth,
+    accessToken: data.access_token,
+    expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000,
+    scope: data.scope ?? currentAuth.scope,
+  }
+
+  if (data.refresh_token) {
+    updatedAuth.refreshToken = data.refresh_token
+  }
+
+  persistSpotifyAuth(updatedAuth)
+
+  return updatedAuth
 }

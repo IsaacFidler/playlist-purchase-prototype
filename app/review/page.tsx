@@ -286,8 +286,8 @@ export default function ReviewPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTracks.map((track) => (
-                  <TableRow key={track.id}>
+            {filteredTracks.map((track, index) => (
+              <TableRow key={`${track.id}-${index}`}>
                     <TableCell>
                       <Checkbox
                         checked={selectedTracks.has(track.id)}
