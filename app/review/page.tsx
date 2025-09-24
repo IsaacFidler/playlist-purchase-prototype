@@ -12,12 +12,41 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Download, ExternalLink, Music, AlertCircle, ShoppingCart, Filter } from "lucide-react"
 
+import { cn } from "@/lib/utils"
+
 function parsePrice(value?: string | null) {
   if (!value) return NaN
 
   const numeric = value.replace(/[^0-9.,-]/g, "").replace(/,/g, "")
   const parsed = Number.parseFloat(numeric)
   return Number.isNaN(parsed) ? NaN : parsed
+}
+
+function formatCurrency(value: number) {
+  return value.toLocaleString("en-US", { style: "currency", currency: "USD" })
+}
+
+function getVendorFilterKey(name: string): VendorFilter | null {
+  const normalized = name.toLowerCase()
+  if (normalized.includes("discogs")) return "discogs"
+  if (normalized.includes("bandcamp")) return "bandcamp"
+  if (normalized.includes("apple") || normalized.includes("itunes")) return "itunes"
+  return null
+}
+
+function getVendorBadgeClasses(name: string) {
+  const key = getVendorFilterKey(name)
+
+  switch (key) {
+    case "discogs":
+      return "bg-[#5865F2]/15 text-[#5865F2] border-[#5865F2]/30"
+    case "bandcamp":
+      return "bg-teal-500/10 text-teal-400 border-teal-500/30"
+    case "itunes":
+      return "bg-red-500/10 text-red-500 border-red-500/30"
+    default:
+      return "bg-secondary/10 text-secondary-foreground border-secondary/30"
+  }
 }
 
 interface Track {
@@ -36,6 +65,8 @@ interface Track {
   selected?: boolean
 }
 
+type VendorFilter = "all" | "itunes" | "discogs" | "bandcamp"
+
 interface PlaylistData {
   url: string
   name: string
@@ -50,7 +81,7 @@ export default function ReviewPage() {
   const [tracks, setTracks] = useState<Track[]>([])
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [selectedTracks, setSelectedTracks] = useState<Set<string>>(new Set())
-  const [vendorFilter, setVendorFilter] = useState<string>("all")
+  const [vendorFilter, setVendorFilter] = useState<VendorFilter>("all")
   const [isProcessingPurchase, setIsProcessingPurchase] = useState(false)
   const router = useRouter()
 
@@ -94,13 +125,11 @@ export default function ReviewPage() {
 
   const filteredTracks = tracks.filter((track) => {
     if (vendorFilter === "all") return true
-    return track.vendors.some(
-      (vendor) => vendor.name.toLowerCase().includes(vendorFilter.toLowerCase()) && vendor.available,
-    )
+    return track.vendors.some((vendor) => getVendorFilterKey(vendor.name) === vendorFilter && vendor.available)
   })
 
   const selectedTracksList = tracks.filter((track) => selectedTracks.has(track.id))
-  const totalCost = selectedTracksList.reduce((sum, track) => {
+const totalCost = selectedTracksList.reduce((sum, track) => {
     const prices = track.vendors
       .filter((vendor) => vendor.available && vendor.price)
       .map((vendor) => parsePrice(vendor.price))
@@ -110,7 +139,9 @@ export default function ReviewPage() {
 
     const cheapestPrice = Math.min(...prices)
     return sum + cheapestPrice
-  }, 0)
+}, 0)
+
+const formattedTotalCost = formatCurrency(totalCost)
 
   const handleBulkPurchase = async () => {
     if (selectedTracks.size === 0) return
@@ -203,7 +234,7 @@ export default function ReviewPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-8">
+    <div className="mx-auto w-full max-w-6xl space-y-8">
       {/* Header */}
       <div className="space-y-4">
         <Link
@@ -238,7 +269,7 @@ export default function ReviewPage() {
               ) : (
                 <>
                   <ShoppingCart className="mr-2 h-4 w-4" />
-                  Purchase Selected (${totalCost.toFixed(2)})
+                  Purchase Selected ({formattedTotalCost})
                 </>
               )}
             </Button>
@@ -258,15 +289,15 @@ export default function ReviewPage() {
           </div>
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
-            <Select value={vendorFilter} onValueChange={setVendorFilter}>
-              <SelectTrigger className="w-40">
+            <Select value={vendorFilter} onValueChange={(value) => setVendorFilter(value as VendorFilter)}>
+              <SelectTrigger className="w-44">
                 <SelectValue placeholder="Filter by vendor" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Vendors</SelectItem>
-                <SelectItem value="apple">Apple Music</SelectItem>
+                <SelectItem value="itunes">Apple iTunes</SelectItem>
+                <SelectItem value="discogs">Discogs Marketplace</SelectItem>
                 <SelectItem value="bandcamp">Bandcamp</SelectItem>
-                <SelectItem value="amazon">Amazon Music</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -314,16 +345,23 @@ export default function ReviewPage() {
                     <TableCell>
                       <div className="flex flex-wrap gap-2">
                         {track.vendors.map((vendor) => (
-                          <div key={vendor.name} className="flex items-center gap-1">
+                          <div key={`${vendor.name}-${vendor.url}`} className="flex items-center gap-1">
                             {vendor.available ? (
-                              <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "border border-border/40 bg-secondary/10 text-secondary-foreground",
+                                  getVendorBadgeClasses(vendor.name),
+                                )}
+                              >
                                 <a
                                   href={vendor.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center gap-1 hover:underline"
                                 >
-                                  {vendor.name} ({vendor.price})
+                                  <span>{vendor.name}</span>
+                                  {vendor.price ? <span>({vendor.price})</span> : null}
                                   <ExternalLink className="h-3 w-3" />
                                 </a>
                               </Badge>
@@ -380,7 +418,7 @@ export default function ReviewPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Cost</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalCost.toFixed(2)}</div>
+            <div className="text-2xl font-bold">{formattedTotalCost}</div>
             <p className="text-xs text-muted-foreground">Selected tracks</p>
           </CardContent>
         </Card>

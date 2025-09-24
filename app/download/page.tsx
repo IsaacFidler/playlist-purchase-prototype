@@ -34,7 +34,6 @@ interface CompletedPurchase {
 export default function DownloadPage() {
   const [purchaseData, setPurchaseData] = useState<CompletedPurchase | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [downloadFormat, setDownloadFormat] = useState<"csv" | "json" | "txt">("csv")
   const [copySuccess, setCopySuccess] = useState(false)
   const router = useRouter()
 

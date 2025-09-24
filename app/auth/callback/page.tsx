@@ -46,6 +46,19 @@ export default function SpotifyCallbackPage() {
     const { codeVerifier, state: storedState } = consumeSpotifyPkceState()
 
     if (!codeVerifier) {
+      try {
+        const existingAuth = localStorage.getItem("spotify-auth")
+        if (existingAuth) {
+          setStatusMessage("Spotify already connected. Redirecting...")
+          setTimeout(() => {
+            router.replace("/import")
+          }, 500)
+          return
+        }
+      } catch (storageError) {
+        console.warn("Unable to read existing Spotify auth", storageError)
+      }
+
       setError("Unable to validate the authorization response. Please restart the connection flow.")
       return
     }

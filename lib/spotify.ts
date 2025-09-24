@@ -18,6 +18,12 @@ export async function createSpotifyAuthorizeUrl() {
 
   sessionStorage.setItem(CODE_VERIFIER_STORAGE_KEY, codeVerifier)
   sessionStorage.setItem(STATE_STORAGE_KEY, state)
+  try {
+    localStorage.setItem(CODE_VERIFIER_STORAGE_KEY, codeVerifier)
+    localStorage.setItem(STATE_STORAGE_KEY, state)
+  } catch (error) {
+    console.warn("Failed to persist PKCE state in localStorage", error)
+  }
 
   const params = new URLSearchParams({
     response_type: "code",
@@ -33,13 +39,28 @@ export async function createSpotifyAuthorizeUrl() {
 }
 
 export function consumeSpotifyPkceState() {
-  const codeVerifier = sessionStorage.getItem(CODE_VERIFIER_STORAGE_KEY)
-  const state = sessionStorage.getItem(STATE_STORAGE_KEY)
+  let codeVerifier = sessionStorage.getItem(CODE_VERIFIER_STORAGE_KEY)
+  let state = sessionStorage.getItem(STATE_STORAGE_KEY)
+
+  if (!codeVerifier || !state) {
+    try {
+      codeVerifier = codeVerifier ?? localStorage.getItem(CODE_VERIFIER_STORAGE_KEY)
+      state = state ?? localStorage.getItem(STATE_STORAGE_KEY)
+    } catch (error) {
+      console.warn("Failed to read PKCE state from localStorage", error)
+    }
+  }
 
   sessionStorage.removeItem(CODE_VERIFIER_STORAGE_KEY)
   sessionStorage.removeItem(STATE_STORAGE_KEY)
+  try {
+    localStorage.removeItem(CODE_VERIFIER_STORAGE_KEY)
+    localStorage.removeItem(STATE_STORAGE_KEY)
+  } catch (error) {
+    console.warn("Failed to clear PKCE state from localStorage", error)
+  }
 
-  return { codeVerifier, state }
+  return { codeVerifier: codeVerifier ?? null, state: state ?? null }
 }
 
 function generateCodeVerifier(length = 128) {

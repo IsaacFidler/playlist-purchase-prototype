@@ -168,7 +168,12 @@ export default function ImportPage() {
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
-        throw new Error(data.error ?? "Unable to fetch playlist from Spotify.")
+        throw new Error(
+          data.error ??
+            (response.status === 404
+              ? "We couldn't find that playlist. Make sure it exists and you're authorized to view it."
+              : "Unable to fetch playlist from Spotify."),
+        )
       }
 
       setImportProgress({ step: "processing", progress: 55, message: "Processing tracks..." })

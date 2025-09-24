@@ -52,10 +52,12 @@ export async function POST(request: Request) {
 
   if (!playlistResponse.ok) {
     const errorBody = await playlistResponse.json().catch(() => undefined)
-    return NextResponse.json(
-      { error: errorBody?.error?.message ?? "Failed to fetch playlist." },
-      { status: playlistResponse.status },
-    )
+    const message =
+      playlistResponse.status === 404
+        ? "Cannot find that playlist. It may be private or you might not have access."
+        : errorBody?.error?.message ?? "Failed to fetch playlist."
+
+    return NextResponse.json({ error: message }, { status: playlistResponse.status })
   }
 
   const playlistJson = (await playlistResponse.json()) as SpotifyPlaylistResponse
@@ -94,8 +96,21 @@ export async function POST(request: Request) {
   return NextResponse.json(payload)
 }
 
+type TrackWithVendors = {
+  name: string
+  artist: string
+  spotifyId?: string | null
+  isrc?: string | null
+  vendors: Array<{
+    name: string
+    url: string
+    price: string
+    available: boolean
+  }>
+}
+
 async function enrichWithITunesOffers(
-  tracks: Array<{ name: string; artist: string; spotifyId?: string | null; isrc?: string | null; vendors: any[] }>,
+  tracks: TrackWithVendors[],
 ) {
   const BATCH_SIZE = 10
 
@@ -113,12 +128,15 @@ async function enrichWithITunesOffers(
 
           if (!match) return
 
-          track.vendors.push({
-            name: "Apple iTunes",
-            url: match.url,
-            price: formatITunesPrice(match),
-            available: true,
-          })
+          const formattedPrice = formatITunesPrice(match)
+          if (formattedPrice) {
+            track.vendors.push({
+              name: "Apple iTunes",
+              url: match.url,
+              price: formattedPrice,
+              available: true,
+            })
+          }
         } catch (error) {
           console.warn("Failed to enrich track with iTunes data", error)
         }
@@ -128,7 +146,17 @@ async function enrichWithITunesOffers(
 }
 
 async function enrichWithDiscogsOffers(
-  tracks: Array<{ name: string; artist: string; album: string | null; vendors: any[] }>,
+  tracks: Array<{
+    name: string
+    artist: string
+    album: string | null
+    vendors: Array<{
+      name: string
+      url: string
+      price?: string
+      available: boolean
+    }>
+  }>,
 ) {
   const token = process.env.DISCOGS_TOKEN
   if (!token) return
@@ -194,12 +222,12 @@ async function fetchAllTracks(url: string, headers: Record<string, string>) {
   let nextUrl: string | null = url
 
   while (nextUrl) {
-    const response = await fetch(nextUrl, { headers })
+    const response: Response = await fetch(nextUrl, { headers })
     if (!response.ok) {
       break
     }
-    const data = await response.json()
-    tracks.push(...(data.items as SpotifyPlaylistTrack[]))
+    const data: { items: SpotifyPlaylistTrack[]; next: string | null } = await response.json()
+    tracks.push(...data.items)
     nextUrl = data.next
   }
 
