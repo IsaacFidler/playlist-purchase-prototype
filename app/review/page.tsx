@@ -12,6 +12,14 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Download, ExternalLink, Music, AlertCircle, ShoppingCart, Filter } from "lucide-react"
 
+function parsePrice(value?: string | null) {
+  if (!value) return NaN
+
+  const numeric = value.replace(/[^0-9.,-]/g, "").replace(/,/g, "")
+  const parsed = Number.parseFloat(numeric)
+  return Number.isNaN(parsed) ? NaN : parsed
+}
+
 interface Track {
   id: string
   name: string
@@ -93,10 +101,15 @@ export default function ReviewPage() {
 
   const selectedTracksList = tracks.filter((track) => selectedTracks.has(track.id))
   const totalCost = selectedTracksList.reduce((sum, track) => {
-    const cheapestVendor = track.vendors
-      .filter((v) => v.available)
-      .sort((a, b) => Number.parseFloat(a.price.replace("$", "")) - Number.parseFloat(b.price.replace("$", "")))[0]
-    return sum + (cheapestVendor ? Number.parseFloat(cheapestVendor.price.replace("$", "")) : 0)
+    const prices = track.vendors
+      .filter((vendor) => vendor.available && vendor.price)
+      .map((vendor) => parsePrice(vendor.price))
+      .filter((value): value is number => Number.isFinite(value))
+
+    if (!prices.length) return sum
+
+    const cheapestPrice = Math.min(...prices)
+    return sum + cheapestPrice
   }, 0)
 
   const handleBulkPurchase = async () => {

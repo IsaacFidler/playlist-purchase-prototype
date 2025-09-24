@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 
@@ -20,8 +20,15 @@ export default function SpotifyCallbackPage() {
   const searchParams = useSearchParams()
   const [statusMessage, setStatusMessage] = useState("Completing Spotify connection...")
   const [error, setError] = useState<string | null>(null)
+  const hasHandledRef = useRef(false)
 
   useEffect(() => {
+    if (hasHandledRef.current) {
+      return
+    }
+
+    hasHandledRef.current = true
+
     const code = searchParams.get("code")
     const returnedState = searchParams.get("state")
     const authError = searchParams.get("error")

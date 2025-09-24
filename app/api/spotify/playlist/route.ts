@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { findITunesOffer, formatITunesPrice } from "@/lib/vendors/apple"
+import { findDiscogsOffer, formatDiscogsPrice } from "@/lib/vendors/discogs"
 
 const SPOTIFY_API_BASE = "https://api.spotify.com/v1"
 
@@ -79,6 +80,7 @@ export async function POST(request: Request) {
   }).filter((track): track is NonNullable<typeof track> => Boolean(track))
 
   await enrichWithITunesOffers(normalizedTracks)
+  await enrichWithDiscogsOffers(normalizedTracks)
 
   const payload = {
     url: playlistJson.external_urls?.spotify ?? playlistUrl,
@@ -119,6 +121,51 @@ async function enrichWithITunesOffers(
           })
         } catch (error) {
           console.warn("Failed to enrich track with iTunes data", error)
+        }
+      }),
+    )
+  }
+}
+
+async function enrichWithDiscogsOffers(
+  tracks: Array<{ name: string; artist: string; album: string | null; vendors: any[] }>,
+) {
+  const token = process.env.DISCOGS_TOKEN
+  if (!token) return
+
+  const BATCH_SIZE = 8
+
+  for (let i = 0; i < tracks.length; i += BATCH_SIZE) {
+    const batch = tracks.slice(i, i + BATCH_SIZE)
+
+    await Promise.all(
+      batch.map(async (track) => {
+        try {
+          const artist = track.artist?.split(",")[0]?.trim()
+          const match = await findDiscogsOffer({
+            trackName: track.name,
+            artistName: artist,
+            albumName: track.album,
+          })
+
+          if (!match) return
+
+          track.vendors.push({
+            name: "Discogs Marketplace",
+            url: match.marketplaceUrl,
+            price: formatDiscogsPrice(match),
+            available: match.numForSale ? match.numForSale > 0 : true,
+          })
+
+          if (match.bandcampUrl) {
+            track.vendors.push({
+              name: "Bandcamp (via Discogs)",
+              url: match.bandcampUrl,
+              available: true,
+            })
+          }
+        } catch (error) {
+          console.warn("Failed to enrich track with Discogs data", error)
         }
       }),
     )
