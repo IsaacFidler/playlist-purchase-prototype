@@ -81,7 +81,7 @@ export async function findDiscogsOffer(params: DiscogsSearchParams) {
     const match: DiscogsMatch = {
       marketplaceUrl: release.uri,
       lowestPrice: release.lowest_price,
-      currency: release.lowest_price ? "USD" : undefined,
+      currency: release.lowest_price ? "GBP" : undefined,
       numForSale: release.num_for_sale,
       bandcampUrl,
       videoUrls,
@@ -149,6 +149,7 @@ async function searchDiscogs(params: DiscogsSearchParams, token: string) {
 async function fetchRelease(resourceUrl: string, token: string) {
   const url = new URL(resourceUrl)
   url.searchParams.set("token", token)
+  url.searchParams.set("currency", "GBP")
 
   const response = await fetch(url, {
     headers: {
@@ -165,6 +166,7 @@ async function fetchRelease(resourceUrl: string, token: string) {
 async function fetchMaster(masterId: number, token: string) {
   const url = new URL(`${DISCOGS_API_BASE}/masters/${masterId}`)
   url.searchParams.set("token", token)
+  url.searchParams.set("currency", "GBP")
 
   const response = await fetch(url, {
     headers: {
@@ -189,10 +191,10 @@ function normalizeTerm(value: string) {
 export function formatDiscogsPrice(match: DiscogsMatch) {
   if (!match.lowestPrice) return undefined
 
-  const currency = match.currency ?? "USD"
+  const currency = match.currency ?? "GBP"
 
   try {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("en-GB", {
       style: "currency",
       currency,
     }).format(match.lowestPrice)

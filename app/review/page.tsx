@@ -23,7 +23,7 @@ function parsePrice(value?: string | null) {
 }
 
 function formatCurrency(value: number) {
-  return value.toLocaleString("en-US", { style: "currency", currency: "USD" })
+  return value.toLocaleString("en-GB", { style: "currency", currency: "GBP" })
 }
 
 function getVendorFilterKey(name: string): VendorFilter | null {

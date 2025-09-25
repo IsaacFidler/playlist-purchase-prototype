@@ -1,4 +1,5 @@
 const ITUNES_SEARCH_URL = "https://itunes.apple.com/search"
+const ITUNES_COUNTRY = process.env.NEXT_PUBLIC_ITUNES_COUNTRY ?? "GB"
 
 type ITunesSearchParams = {
   trackName: string
@@ -56,6 +57,7 @@ async function searchByIsrc({ isrc }: ITunesSearchParams) {
   url.searchParams.set("term", isrc)
   url.searchParams.set("entity", "song")
   url.searchParams.set("limit", "1")
+  url.searchParams.set("country", ITUNES_COUNTRY)
 
   const response = await fetch(url, { next: { revalidate: 60 * 60 } })
   if (!response.ok) return null
@@ -74,7 +76,7 @@ async function searchByMetadata({ trackName, artistName }: ITunesSearchParams) {
   url.searchParams.set("term", term)
   url.searchParams.set("entity", "song")
   url.searchParams.set("limit", "5")
-  url.searchParams.set("country", "US")
+  url.searchParams.set("country", ITUNES_COUNTRY)
 
   const response = await fetch(url, { next: { revalidate: 60 * 60 } })
   if (!response.ok) return null
@@ -120,7 +122,7 @@ export function formatITunesPrice(match: ITunesMatch) {
   if (!match.price || !match.currency) return undefined
 
   try {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("en-GB", {
       style: "currency",
       currency: match.currency,
     }).format(match.price)
