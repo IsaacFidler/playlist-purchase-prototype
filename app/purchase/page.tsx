@@ -219,7 +219,7 @@ export default function PurchasePage() {
             </div>
             <Progress value={purchaseProgress.progress} className="h-2" />
             {purchaseProgress.step === "complete" && (
-              <div className="flex items-center gap-2 text-green-600">
+              <div className="flex items-center gap-2 text-[#00FF9D]">
                 <CheckCircle className="h-4 w-4" />
                 <span className="text-sm font-medium">All purchase links ready!</span>
               </div>
@@ -245,7 +245,7 @@ export default function PurchasePage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="font-medium">{track.name}</h3>
-                      {isCompleted && <CheckCircle className="h-4 w-4 text-green-600" />}
+                      {isCompleted && <CheckCircle className="h-4 w-4 text-[#00FF9D]" />}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {track.artist} • {track.album}
@@ -253,7 +253,7 @@ export default function PurchasePage() {
                   </div>
                   <div className="flex items-center gap-3">
                     {bestVendor && (
-                      <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
+                      <Badge variant="outline" className="bg-[#00FF9D]/10 text-[#00FF9D] border-[#00FF9D]/20">
                         {bestVendor.name} • {bestVendor.price}
                       </Badge>
                     )}
@@ -291,7 +291,7 @@ export default function PurchasePage() {
             onClick={handleStartPurchase}
             disabled={isPurchasing}
             size="lg"
-            className="bg-green-600 hover:bg-green-700"
+            className="bg-[#00FF9D] hover:bg-[#00E38C] text-[#032B1A]"
           >
             {isPurchasing ? (
               <>

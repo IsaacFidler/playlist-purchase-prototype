@@ -288,7 +288,7 @@ export default function ImportPage() {
                 </div>
                 <Progress value={importProgress.progress} className="h-2" />
                 {importProgress.step === "complete" && (
-                  <div className="flex items-center gap-2 text-green-600">
+                  <div className="flex items-center gap-2 text-[#00FF9D]">
                     <CheckCircle className="h-4 w-4" />
                     <span className="text-sm font-medium">Redirecting to review...</span>
                   </div>

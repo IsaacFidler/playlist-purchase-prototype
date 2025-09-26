@@ -85,7 +85,7 @@ export default function DashboardPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "completed":
-        return "bg-green-500/10 text-green-500 border-green-500/20"
+        return "bg-[#00FF9D]/10 text-[#00FF9D] border-[#00FF9D]/20"
       case "in-progress":
         return "bg-blue-500/10 text-blue-500 border-blue-500/20"
       case "pending":

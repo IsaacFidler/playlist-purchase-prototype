@@ -259,7 +259,7 @@ const formattedTotalCost = formatCurrency(totalCost)
             <Button
               onClick={handleBulkPurchase}
               disabled={selectedTracks.size === 0 || isProcessingPurchase}
-              className="bg-green-600 hover:bg-green-700"
+              className="bg-[#00FF9D] hover:bg-[#00E38C] text-[#032B1A]"
             >
               {isProcessingPurchase ? (
                 <>

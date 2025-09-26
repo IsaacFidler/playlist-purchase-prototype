@@ -208,7 +208,7 @@ export default function AccountPage() {
                   <Shield className="h-4 w-4 text-muted-foreground" />
                   <span className="text-muted-foreground">Account Status</span>
                 </div>
-                <p className="text-sm font-medium text-green-500">Active</p>
+                <p className="text-sm font-medium text-[#00FF9D]">Active</p>
               </div>
             </CardContent>
           </Card>
