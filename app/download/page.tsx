@@ -360,7 +360,7 @@ export default function DownloadPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {vendor && (
-                      <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
+                      <Badge variant="outline" className="bg-[#00FF9D]/10 text-[#00FF9D] border-[#00FF9D]/20">
                         {vendor.name} • {vendor.price}
                       </Badge>
                     )}
