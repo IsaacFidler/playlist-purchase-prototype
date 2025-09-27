@@ -49,9 +49,10 @@ These helpers keep auth cookies in sync across client and server.
 
 ## 7. Persist Playlist Data
 
-1. Use Supabase SQL Editor (or Prisma later) to create tables for `profiles`, `playlists`, `tracks`, `vendors`, etc.
-2. Update import/review flows to insert and query data via Supabase (either with the JS client or Prisma).
-3. Store imported playlists in the database and fetch them on `/review` instead of relying solely on `localStorage`.
+1. Use the new Drizzle schema definitions under `db/schema.ts` to keep the database structure in sync.
+2. Run `DATABASE_URL=... yarn db:generate` to produce SQL in `drizzle/` and execute the generated migration (e.g. `drizzle/0000_...sql`) through the Supabase SQL editor or CLI.
+3. Update import/review flows to insert and query data via the Supabase JS client + Drizzle queries.
+4. Store imported playlists in the database and fetch them on `/review` instead of relying solely on `localStorage`.
 
 ## 8. Protect Routes
 
