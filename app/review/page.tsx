@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -58,6 +58,7 @@ interface Track {
   duration: string
   spotifyId: string
   vendors: {
+    id?: string
     name: string
     url: string
     price: string
@@ -69,6 +70,7 @@ interface Track {
 type VendorFilter = "all" | "itunes" | "discogs" | "bandcamp"
 
 interface PlaylistData {
+  id: string
   url: string
   name: string
   description: string
@@ -83,8 +85,12 @@ export default function ReviewPage() {
   const [selectedTracks, setSelectedTracks] = useState<Set<string>>(new Set())
   const [vendorFilter, setVendorFilter] = useState<VendorFilter>("all")
   const [isProcessingPurchase, setIsProcessingPurchase] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const router = useRouter()
   const session = useSession()
+  const searchParams = useSearchParams()
+  const importId = searchParams.get("importId")
 
   useEffect(() => {
     if (session === null) {
@@ -92,16 +98,36 @@ export default function ReviewPage() {
       return
     }
 
-    // Load playlist data
-    const storedPlaylist = localStorage.getItem("current-playlist")
-    if (storedPlaylist) {
-      const data = JSON.parse(storedPlaylist) as PlaylistData
-      setPlaylistData(data)
-      setTracks(data.tracks)
-      // Select all tracks by default
-      setSelectedTracks(new Set(data.tracks.map((t) => t.id)))
+    if (!importId) {
+      setErrorMessage("Missing playlist identifier. Please start a new import.")
+      setIsLoading(false)
+      return
     }
-  }, [router])
+
+    const loadPlaylist = async () => {
+      try {
+        setIsLoading(true)
+        const response = await fetch(`/api/imports/${importId}`)
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}))
+          throw new Error(data.error ?? "Unable to load playlist.")
+        }
+
+        const payload = (await response.json()) as PlaylistData
+        setPlaylistData(payload)
+        setTracks(payload.tracks)
+        setSelectedTracks(new Set(payload.tracks.map((t) => t.id)))
+        setErrorMessage(null)
+      } catch (error) {
+        console.error(error)
+        setErrorMessage(error instanceof Error ? error.message : "Failed to load playlist.")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadPlaylist()
+  }, [importId, router, session])
 
   const toggleTrackSelection = (trackId: string) => {
     const newSelected = new Set(selectedTracks)
@@ -147,19 +173,23 @@ export default function ReviewPage() {
     setIsProcessingPurchase(true)
 
     // Store selected tracks for purchase page
-    const purchaseData = {
-      tracks: selectedTracksList,
-      totalCost,
-      playlistName: playlistData?.name || "Playlist",
-      timestamp: new Date().toISOString(),
+    try {
+      await fetch(`/api/imports/${playlistData?.id ?? importId}/selection`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          trackIds: Array.from(selectedTracks.values()),
+          totalCost,
+          status: "draft",
+        }),
+      })
+
+      router.push(`/purchase?importId=${playlistData?.id ?? importId}`)
+    } finally {
+      setIsProcessingPurchase(false)
     }
-
-    localStorage.setItem("purchase-data", JSON.stringify(purchaseData))
-
-    // Simulate processing time
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-
-    router.push("/purchase")
   }
 
   const handleExportCSV = () => {
@@ -172,14 +202,14 @@ export default function ReviewPage() {
         track.artist,
         track.album,
         track.duration,
-        track.vendors.find((v) => v.name === "Apple Music")?.available
-          ? track.vendors.find((v) => v.name === "Apple Music")?.url || ""
+        track.vendors.find((v) => v.name.toLowerCase().includes("apple"))?.available
+          ? track.vendors.find((v) => v.name.toLowerCase().includes("apple"))?.url || ""
           : "",
-        track.vendors.find((v) => v.name === "Bandcamp")?.available
-          ? track.vendors.find((v) => v.name === "Bandcamp")?.url || ""
+        track.vendors.find((v) => v.name.toLowerCase().includes("bandcamp"))?.available
+          ? track.vendors.find((v) => v.name.toLowerCase().includes("bandcamp"))?.url || ""
           : "",
-        track.vendors.find((v) => v.name === "Amazon Music")?.available
-          ? track.vendors.find((v) => v.name === "Amazon Music")?.url || ""
+        track.vendors.find((v) => v.name.toLowerCase().includes("amazon"))?.available
+          ? track.vendors.find((v) => v.name.toLowerCase().includes("amazon"))?.url || ""
           : "",
       ]),
     ]
@@ -195,7 +225,29 @@ export default function ReviewPage() {
     window.URL.revokeObjectURL(url)
   }
 
-  if (!playlistData || tracks.length === 0) {
+  if (!session) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Loading playlist...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (errorMessage || !playlistData || tracks.length === 0) {
     return (
       <div className="mx-auto w-full max-w-4xl space-y-8">
         <div className="space-y-4">
@@ -208,13 +260,13 @@ export default function ReviewPage() {
           </Link>
           <div>
             <h1 className="text-3xl font-bold text-balance">Review Playlist</h1>
-            <p className="text-muted-foreground text-lg">No playlist data found</p>
+            <p className="text-muted-foreground text-lg">{errorMessage ?? "No playlist data found"}</p>
           </div>
         </div>
 
         <Alert>
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>No playlist found. Please import a playlist first.</AlertDescription>
+          <AlertDescription>{errorMessage ?? "No playlist found. Please import a playlist first."}</AlertDescription>
         </Alert>
       </div>
     )

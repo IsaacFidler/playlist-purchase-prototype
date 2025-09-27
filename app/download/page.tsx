@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -39,6 +39,8 @@ export default function DownloadPage() {
   const [copySuccess, setCopySuccess] = useState(false)
   const router = useRouter()
   const session = useSession()
+  const searchParams = useSearchParams()
+  const importId = searchParams.get("importId")
 
   useEffect(() => {
     if (session === null) {
@@ -46,13 +48,60 @@ export default function DownloadPage() {
       return
     }
 
-    // Load completed purchase data
-    const storedPurchase = localStorage.getItem("completed-purchase")
-    if (storedPurchase) {
-      const data = JSON.parse(storedPurchase) as CompletedPurchase
-      setPurchaseData(data)
+    if (!importId) {
+      setPurchaseData(null)
+      return
     }
-  }, [router, session])
+
+    const loadPurchase = async () => {
+      try {
+        const [playlistResponse, selectionResponse] = await Promise.all([
+          fetch(`/api/imports/${importId}`),
+          fetch(`/api/imports/${importId}/selection`),
+        ])
+
+        if (!playlistResponse.ok) {
+          throw new Error("Unable to load playlist data")
+        }
+
+        const playlist = await playlistResponse.json()
+        const selectionJson = await selectionResponse.json().catch(() => ({ selection: null }))
+        const selection = selectionJson.selection
+
+        if (!selection || !selection.trackIds) {
+          setPurchaseData(null)
+          return
+        }
+
+        const trackMap: CompletedPurchase["tracks"] = (playlist.tracks as CompletedPurchase["tracks"]).map(
+          (track: any) => ({
+            id: track.id,
+            name: track.name,
+            artist: track.artist,
+            album: track.album,
+            duration: track.duration,
+            vendors: track.vendors,
+          }),
+        )
+
+        const selected = trackMap.filter((track) => selection.trackIds.includes(track.id))
+
+        setPurchaseData({
+          tracks: selected,
+          totalCost: selection.totalCost ?? 0,
+          playlistName: playlist.name,
+          timestamp: selection.savedAt ?? new Date().toISOString(),
+          purchaseLinks: (selection.purchaseLinks as Record<string, string>) ?? {},
+          completedAt: selection.savedAt ?? new Date().toISOString(),
+        })
+      } catch (error) {
+        console.error(error)
+        setPurchaseData(null)
+      }
+    }
+
+    loadPurchase()
+  }, [importId, router, session])
 
   const handleDownloadCSV = () => {
     if (!purchaseData) return

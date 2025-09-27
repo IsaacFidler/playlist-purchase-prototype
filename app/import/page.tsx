@@ -178,11 +178,27 @@ export default function ImportPage() {
 
       const playlistData = await response.json()
 
+      setImportProgress({ step: "persisting", progress: 75, message: "Saving playlist to your library..." })
+
+      const persistResponse = await fetch("/api/imports", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ playlist: playlistData }),
+      })
+
+      if (!persistResponse.ok) {
+        const persistError = await persistResponse.json().catch(() => ({}))
+        throw new Error(persistError.error ?? "Failed to save playlist import.")
+      }
+
+      const { id: importId } = await persistResponse.json()
+
       setImportProgress({ step: "complete", progress: 100, message: "Import complete!" })
-      localStorage.setItem("current-playlist", JSON.stringify(playlistData))
 
       setTimeout(() => {
-        router.push("/review")
+        router.push(`/review?importId=${importId}`)
       }, 600)
     } catch (err) {
       console.error(err)

@@ -75,8 +75,11 @@ export async function POST(request: Request) {
       artist: track.artists.map((artist) => artist.name).join(", "),
       album: track.album?.name ?? null,
       duration: formatDuration(track.duration_ms),
+      durationMs: track.duration_ms,
       spotifyId: track.id,
+      spotifyUrl: track.external_urls?.spotify,
       isrc: track.external_ids?.isrc ?? null,
+      orderIndex: index,
       vendors: [],
     }
   }).filter((track): track is NonNullable<typeof track> => Boolean(track))
@@ -85,6 +88,7 @@ export async function POST(request: Request) {
   await enrichWithDiscogsOffers(normalizedTracks)
 
   const payload = {
+    spotifyPlaylistId: playlistId,
     url: playlistJson.external_urls?.spotify ?? playlistUrl,
     name: playlistJson.name,
     description: playlistJson.description,

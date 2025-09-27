@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -55,6 +55,8 @@ export default function PurchasePage() {
   const [purchaseLinks, setPurchaseLinks] = useState<{ [key: string]: string }>({})
   const router = useRouter()
   const session = useSession()
+  const searchParams = useSearchParams()
+  const importId = searchParams.get("importId")
 
   useEffect(() => {
     if (session === null) {
@@ -62,13 +64,55 @@ export default function PurchasePage() {
       return
     }
 
-    // Load purchase data
-    const storedPurchaseData = localStorage.getItem("purchase-data")
-    if (storedPurchaseData) {
-      const data = JSON.parse(storedPurchaseData) as PurchaseData
-      setPurchaseData(data)
+    if (!importId) {
+      setPurchaseData(null)
+      return
     }
-  }, [router, session])
+
+    const loadData = async () => {
+      try {
+        const [playlistResponse, selectionResponse] = await Promise.all([
+          fetch(`/api/imports/${importId}`),
+          fetch(`/api/imports/${importId}/selection`),
+        ])
+
+        if (!playlistResponse.ok) {
+          throw new Error("Unable to load playlist data")
+        }
+
+        const playlist = await playlistResponse.json()
+
+        const selectionJson = await selectionResponse.json().catch(() => ({ selection: null }))
+        const selection = selectionJson.selection
+
+        if (!selection || !selection.trackIds) {
+          setPurchaseData(null)
+          return
+        }
+
+        const selectedTracks = (playlist.tracks as Track[]).filter((track: Track) =>
+          selection.trackIds.includes(track.id),
+        )
+
+        setPurchaseData({
+          tracks: selectedTracks,
+          totalCost: selection.totalCost ?? 0,
+          playlistName: playlist.name,
+          timestamp: selection.savedAt ?? new Date().toISOString(),
+        })
+
+        if (selection.purchaseLinks) {
+          setPurchaseLinks(selection.purchaseLinks as Record<string, string>)
+          setPurchaseComplete(true)
+        }
+      } catch (error) {
+        console.error(error)
+        setPurchaseData(null)
+      }
+    }
+
+    loadData()
+  }, [importId, router, session])
 
   const getBestVendor = (track: Track) => {
     return track.vendors
@@ -131,12 +175,24 @@ export default function PurchasePage() {
     setIsPurchasing(false)
 
     // Store completed purchase for download page
-    const completedPurchase = {
-      ...purchaseData,
-      purchaseLinks: links,
-      completedAt: new Date().toISOString(),
+    if (importId) {
+      try {
+        await fetch(`/api/imports/${importId}/selection`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            trackIds: purchaseData.tracks.map((track) => track.id),
+            totalCost: purchaseData.totalCost,
+            purchaseLinks: links,
+            status: "completed",
+          }),
+        })
+      } catch (error) {
+        console.error("Failed to persist purchase completion", error)
+      }
     }
-    localStorage.setItem("completed-purchase", JSON.stringify(completedPurchase))
   }
 
   const handleOpenAllLinks = () => {
@@ -148,7 +204,8 @@ export default function PurchasePage() {
   }
 
   const handleDownloadCollection = () => {
-    router.push("/download")
+    if (!importId) return
+    router.push(`/download?importId=${importId}`)
   }
 
   if (!session) {
@@ -167,7 +224,7 @@ export default function PurchasePage() {
       <div className="mx-auto w-full max-w-4xl space-y-8">
         <div className="space-y-4">
           <Link
-            href="/review"
+            href={`/review?importId=${importId ?? ""}`}
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -194,7 +251,7 @@ export default function PurchasePage() {
       {/* Header */}
       <div className="space-y-4">
         <Link
-          href="/review"
+          href={`/review?importId=${importId ?? ""}`}
           className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
