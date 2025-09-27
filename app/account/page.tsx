@@ -29,9 +29,12 @@ export default function AccountPage() {
   const session = useSession()
   const supabase = useSupabaseClient()
 
-  const displayName = useMemo(() => {
-    if (!session?.user) return ""
-    return session.user.user_metadata?.full_name || session.user.email?.split("@")[0] || ""
+  const { firstName, lastName } = useMemo(() => {
+    if (!session?.user) return { firstName: "", lastName: "" }
+    return {
+      firstName: session.user.user_metadata?.first_name ?? "",
+      lastName: session.user.user_metadata?.last_name ?? "",
+    }
   }, [session])
 
   useEffect(() => {
@@ -95,8 +98,12 @@ export default function AccountPage() {
             <CardContent className="space-y-4">
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input id="name" value={displayName} readOnly className="bg-muted/50" />
+                  <Label htmlFor="first-name">First Name</Label>
+                  <Input id="first-name" value={firstName} readOnly className="bg-muted/50" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="last-name">Last Name</Label>
+                  <Input id="last-name" value={lastName} readOnly className="bg-muted/50" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address</Label>

@@ -1,0 +1,194 @@
+// Prisma schema for playlist-purchase-prototype
+// Aligns with Supabase (Postgres) using Prisma Client v6
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+enum PlaylistSource {
+  SPOTIFY
+  APPLE_MUSIC
+  YOUTUBE
+  MANUAL_UPLOAD
+}
+
+enum ImportStatus {
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+  ARCHIVED
+}
+
+enum OfferAvailability {
+  AVAILABLE
+  UNAVAILABLE
+  UNKNOWN
+  OUT_OF_STOCK
+}
+
+enum ImportEventType {
+  IMPORT_STARTED
+  SPOTIFY_SYNCED
+  ENRICHMENT_COMPLETE
+  REVIEW_READY
+  EXPORT_TRIGGERED
+  PURCHASE_INITIATED
+  ERROR
+}
+
+model Profile {
+  id                String            @id @db.Uuid
+  email             String            @unique
+  firstName         String?
+  lastName          String?
+  displayName       String?
+  avatarUrl         String?
+  role              UserRole          @default(MEMBER)
+  marketingOptIn    Boolean           @default(false)
+  onboardingStep    String?           @db.VarChar(64)
+  spotifyAccount    SpotifyAccount?
+  playlistImports   PlaylistImport[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([email])
+}
+
+model SpotifyAccount {
+  id              String         @id @default(cuid())
+  userId          String         @db.Uuid
+  accessToken     String         @db.Text
+  refreshToken    String?        @db.Text
+  scope           String?        @db.Text
+  expiresAt       DateTime?
+  tokenType       String?        @db.VarChar(32)
+  lastSyncedAt    DateTime?
+  lastError       String?        @db.Text
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user            Profile        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+}
+
+model PlaylistImport {
+  id                   String            @id @default(cuid())
+  userId               String            @db.Uuid
+  source               PlaylistSource    @default(SPOTIFY)
+  sourcePlaylistId     String?           @db.VarChar(128)
+  sourceUrl            String
+  name                 String
+  description          String?           @db.Text
+  status               ImportStatus      @default(QUEUED)
+  notes                String?           @db.Text
+  totalTracks          Int               @default(0)
+  matchedTracks        Int               @default(0)
+  availableOffers      Int               @default(0)
+  startedAt            DateTime          @default(now())
+  completedAt          DateTime?
+  failedAt             DateTime?
+  failureReason        String?           @db.Text
+  lastVendorSyncAt     DateTime?
+  tracks               PlaylistTrack[]
+  activities           ImportActivity[]
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  user                 Profile           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([source, sourcePlaylistId])
+}
+
+model PlaylistTrack {
+  id                String         @id @default(cuid())
+  importId          String
+  orderIndex        Int
+  name              String
+  artists           String         @db.Text
+  album             String?        @db.Text
+  spotifyTrackId    String?        @db.VarChar(128)
+  spotifyTrackUrl   String?        @db.Text
+  isrc              String?        @db.VarChar(15)
+  discNumber        Int?           @default(1)
+  trackNumber       Int?
+  durationMs        Int?
+  explicit          Boolean        @default(false)
+  previewUrl        String?        @db.Text
+  artworkUrl        String?        @db.Text
+  popularity        Int?
+  vendors           VendorOffer[]
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  import            PlaylistImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@index([importId, orderIndex])
+  @@index([spotifyTrackId])
+  @@index([isrc])
+}
+
+model Vendor {
+  id             String        @id @db.VarChar(32)
+  displayName    String
+  description    String?       @db.Text
+  websiteUrl     String?
+  primaryColor   String?       @db.VarChar(16)
+  secondaryColor String?       @db.VarChar(16)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  offers         VendorOffer[]
+}
+
+model VendorOffer {
+  id               String            @id @default(cuid())
+  trackId          String
+  vendorId         String
+  title            String?           @db.Text
+  subtitle         String?           @db.Text
+  externalId       String?           @db.VarChar(128)
+  externalUrl      String            @db.Text
+  currencyCode     String            @db.VarChar(3)
+  priceValue       Decimal?          @db.Numeric(12, 2)
+  availability     OfferAvailability @default(UNKNOWN)
+  isPreview        Boolean           @default(false)
+  countryCode      String?           @db.VarChar(2)
+  releaseDate      DateTime?
+  lastCheckedAt    DateTime          @default(now())
+  rawPayload       Json?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  track            PlaylistTrack     @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  vendor           Vendor            @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([trackId, vendorId])
+  @@index([vendorId, availability])
+  @@index([trackId, availability])
+  @@index([externalId])
+}
+
+model ImportActivity {
+  id         String           @id @default(cuid())
+  importId   String
+  eventType  ImportEventType
+  message    String?          @db.Text
+  metadata   Json?
+  createdAt  DateTime         @default(now())
+
+  playlistImport PlaylistImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@index([importId, eventType])
+}

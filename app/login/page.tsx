@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = useSupabaseClient()
   const session = useSession()
 
@@ -71,6 +72,11 @@ export default function LoginPage() {
             </div>
           </CardHeader>
           <CardContent>
+            {searchParams.get("confirm") === "true" && (
+              <div className="rounded-md bg-primary/10 p-3 text-sm text-primary">
+                Confirmation email sent. Please verify your address before signing in.
+              </div>
+            )}
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>

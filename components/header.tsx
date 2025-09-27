@@ -37,7 +37,7 @@ export function Header() {
       <div className="max-w-6xl mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <Image src="/playlist-logo.png" alt="Playlist logo" width={32} height={32} className="h-8 w-8" />
+            <Image src="/pplogo.png" alt="Playlist logo" width={32} height={32} className="h-8 w-8" />
           </Link>
 
           <div className="flex items-center gap-4">
