@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -10,33 +10,41 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Music, ArrowLeft } from "lucide-react"
+import { useSupabaseClient, useSession } from "@supabase/auth-helpers-react"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const supabase = useSupabaseClient()
+  const session = useSession()
+
+  useEffect(() => {
+    if (session) {
+      router.replace("/dashboard")
+    }
+  }, [session, router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setError(null)
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    })
 
-    // Stub authentication - accept any values
-    const fakeSession = {
-      user: {
-        id: "1",
-        name: email.split("@")[0],
-        email: email,
-      },
-      token: "fake-jwt-token",
+    if (signInError) {
+      setError(signInError.message)
+      setIsLoading(false)
+      return
     }
 
-    localStorage.setItem("playlist-session", JSON.stringify(fakeSession))
     setIsLoading(false)
-    router.push("/dashboard")
+    router.replace("/dashboard")
   }
 
   return (
@@ -86,6 +94,7 @@ export default function LoginPage() {
                   required
                 />
               </div>
+              {error && <p className="text-sm text-red-500">{error}</p>}
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>

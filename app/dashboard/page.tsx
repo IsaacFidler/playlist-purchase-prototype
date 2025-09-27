@@ -1,18 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Music, Calendar, ExternalLink } from "lucide-react"
-
-interface User {
-  id: string
-  name: string
-  email: string
-}
+import { useSession } from "@supabase/auth-helpers-react"
 
 interface PlaylistActivity {
   id: string
@@ -23,20 +18,22 @@ interface PlaylistActivity {
 }
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<User | null>(null)
   const [recentActivity, setRecentActivity] = useState<PlaylistActivity[]>([])
   const router = useRouter()
+  const session = useSession()
+
+  const displayName = useMemo(() => {
+    if (!session?.user) return "DJ"
+    return (
+      session.user.user_metadata?.full_name || session.user.email?.split("@")[0] || "DJ"
+    )
+  }, [session])
 
   useEffect(() => {
-    // Check authentication
-    const session = localStorage.getItem("playlist-session")
-    if (!session) {
-      router.push("/login")
+    if (session === null) {
+      router.replace("/login")
       return
     }
-
-    const parsedSession = JSON.parse(session)
-    setUser(parsedSession.user)
 
     // Mock recent activity data
     setRecentActivity([
@@ -71,7 +68,7 @@ export default function DashboardPage() {
     ])
   }, [router])
 
-  if (!user) {
+  if (!session) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -100,7 +97,7 @@ export default function DashboardPage() {
       {/* Welcome Section */}
       <div className="space-y-4">
         <div>
-          <h1 className="text-3xl font-bold text-balance">Welcome back, {user.name}!</h1>
+          <h1 className="text-3xl font-bold text-balance">Welcome back, {displayName}!</h1>
           <p className="text-muted-foreground text-lg">
             Ready to turn more playlists into your personal music collection?
           </p>

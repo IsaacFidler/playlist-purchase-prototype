@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { ArrowLeft, Download, ExternalLink, FileText, Music, CheckCircle, Copy } from "lucide-react"
+import { useSession } from "@supabase/auth-helpers-react"
 
 interface CompletedPurchase {
   tracks: Array<{
@@ -31,20 +32,19 @@ interface CompletedPurchase {
   completedAt: string
 }
 
+const formatCurrency = (value: number) => value.toLocaleString("en-GB", { style: "currency", currency: "GBP" })
+
 export default function DownloadPage() {
   const [purchaseData, setPurchaseData] = useState<CompletedPurchase | null>(null)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
   const router = useRouter()
+  const session = useSession()
 
   useEffect(() => {
-    // Check authentication
-    const session = localStorage.getItem("playlist-session")
-    if (!session) {
-      router.push("/login")
+    if (session === null) {
+      router.replace("/login")
       return
     }
-    setIsAuthenticated(true)
 
     // Load completed purchase data
     const storedPurchase = localStorage.getItem("completed-purchase")
@@ -52,7 +52,7 @@ export default function DownloadPage() {
       const data = JSON.parse(storedPurchase) as CompletedPurchase
       setPurchaseData(data)
     }
-  }, [router])
+  }, [router, session])
 
   const handleDownloadCSV = () => {
     if (!purchaseData) return
@@ -114,7 +114,7 @@ export default function DownloadPage() {
       `${purchaseData.playlistName} - Purchase Collection`,
       `Generated: ${new Date(purchaseData.completedAt).toLocaleString()}`,
       `Total Tracks: ${purchaseData.tracks.length}`,
-      `Total Cost: $${purchaseData.totalCost.toFixed(2)}`,
+      `Total Cost: £${purchaseData.totalCost.toFixed(2)}`,
       "",
       "PURCHASE LINKS:",
       "=".repeat(50),
@@ -171,7 +171,7 @@ export default function DownloadPage() {
     })
   }
 
-  if (!isAuthenticated) {
+  if (!session) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -299,7 +299,7 @@ export default function DownloadPage() {
               <div className="text-sm text-muted-foreground">Tracks</div>
             </div>
             <div className="text-center p-3 bg-muted/30 rounded-lg">
-              <div className="text-2xl font-bold">${purchaseData.totalCost.toFixed(2)}</div>
+              <div className="text-2xl font-bold">{formatCurrency(purchaseData.totalCost)}</div>
               <div className="text-sm text-muted-foreground">Total Cost</div>
             </div>
             <div className="text-center p-3 bg-muted/30 rounded-lg">

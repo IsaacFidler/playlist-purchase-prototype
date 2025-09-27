@@ -5,6 +5,8 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Header } from "@/components/header"
 import { DynamicLayout } from "@/components/dynamic-layout"
+import { SupabaseProvider } from "@/components/providers/supabase-provider"
+import { createServerClient } from "@/lib/supabase-server"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -17,18 +19,25 @@ export const metadata: Metadata = {
   generator: "v0.app",
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const supabase = createServerClient()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
   return (
     <html lang="en" className={`${inter.variable} antialiased`} suppressHydrationWarning>
       <body className="min-h-screen gradient-bg">
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
-          <Header />
-          <DynamicLayout>{children}</DynamicLayout>
-        </ThemeProvider>
+        <SupabaseProvider initialSession={session}>
+          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+            <Header />
+            <DynamicLayout>{children}</DynamicLayout>
+          </ThemeProvider>
+        </SupabaseProvider>
       </body>
     </html>
   )

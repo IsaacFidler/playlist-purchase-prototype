@@ -3,7 +3,8 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { ElementType } from "react"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo } from "react"
+import { useSession } from "@supabase/auth-helpers-react"
 import {
   Sidebar as SidebarPrimitive,
   SidebarContent,
@@ -94,35 +95,10 @@ const resourceNavigation: NavItem[] = [
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-
-  useEffect(() => {
-    const syncSession = () => {
-      const session = localStorage.getItem("playlist-session")
-      setIsLoggedIn(!!session)
-    }
-
-    syncSession()
-
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === "playlist-session") {
-        syncSession()
-      }
-    }
-
-    window.addEventListener("storage", handleStorage)
-
-    return () => window.removeEventListener("storage", handleStorage)
-  }, [])
-
-  useEffect(() => {
-    const session = localStorage.getItem("playlist-session")
-    setIsLoggedIn(!!session)
-  }, [pathname])
-
+  const session = useSession()
   const isPublicRoute = PUBLIC_ROUTES.has(pathname)
 
-  const navIsVisible = isLoggedIn && !isPublicRoute
+  const navIsVisible = !!session && !isPublicRoute
 
   const activeSection = useMemo(() => {
     return [...workflowNavigation, ...resourceNavigation].find((item) => {

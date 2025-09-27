@@ -2,8 +2,9 @@
 
 import type React from "react"
 
-import { usePathname } from "next/navigation"
-import { useEffect, useState } from "react"
+import { usePathname, useRouter } from "next/navigation"
+import { useEffect } from "react"
+import { useSession } from "@supabase/auth-helpers-react"
 import {
   SidebarInset,
   SidebarProvider,
@@ -15,43 +16,17 @@ const PUBLIC_ROUTES = new Set(["/", "/login", "/signup"])
 
 export function DynamicLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [isMounted, setIsMounted] = useState(false)
-
-  useEffect(() => {
-    const syncSession = () => {
-      const session = localStorage.getItem("playlist-session")
-      setIsLoggedIn(!!session)
-    }
-
-    syncSession()
-    setIsMounted(true)
-
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === "playlist-session") {
-        syncSession()
-      }
-    }
-
-    window.addEventListener("storage", handleStorage)
-
-    return () => window.removeEventListener("storage", handleStorage)
-  }, [])
-
-  useEffect(() => {
-    if (!isMounted) return
-
-    const session = localStorage.getItem("playlist-session")
-    setIsLoggedIn(!!session)
-  }, [pathname, isMounted])
-
+  const router = useRouter()
+  const session = useSession()
   const isPublicRoute = PUBLIC_ROUTES.has(pathname)
 
-  if (!isMounted && !isPublicRoute) {
-    return null
-  }
+  useEffect(() => {
+    if (!session && !isPublicRoute) {
+      router.replace("/login")
+    }
+  }, [session, isPublicRoute, router])
 
-  const showSidebar = isLoggedIn && !isPublicRoute
+  const showSidebar = !!session && !isPublicRoute
 
   if (!showSidebar) {
     return (

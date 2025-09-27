@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Download, ExternalLink, Music, AlertCircle, ShoppingCart, Filter } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { useSession } from "@supabase/auth-helpers-react"
 
 function parsePrice(value?: string | null) {
   if (!value) return NaN
@@ -79,20 +80,17 @@ interface PlaylistData {
 export default function ReviewPage() {
   const [playlistData, setPlaylistData] = useState<PlaylistData | null>(null)
   const [tracks, setTracks] = useState<Track[]>([])
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [selectedTracks, setSelectedTracks] = useState<Set<string>>(new Set())
   const [vendorFilter, setVendorFilter] = useState<VendorFilter>("all")
   const [isProcessingPurchase, setIsProcessingPurchase] = useState(false)
   const router = useRouter()
+  const session = useSession()
 
   useEffect(() => {
-    // Check authentication
-    const session = localStorage.getItem("playlist-session")
-    if (!session) {
-      router.push("/login")
+    if (session === null) {
+      router.replace("/login")
       return
     }
-    setIsAuthenticated(true)
 
     // Load playlist data
     const storedPlaylist = localStorage.getItem("current-playlist")
@@ -129,7 +127,7 @@ export default function ReviewPage() {
   })
 
   const selectedTracksList = tracks.filter((track) => selectedTracks.has(track.id))
-const totalCost = selectedTracksList.reduce((sum, track) => {
+  const totalCost = selectedTracksList.reduce((sum, track) => {
     const prices = track.vendors
       .filter((vendor) => vendor.available && vendor.price)
       .map((vendor) => parsePrice(vendor.price))
@@ -139,9 +137,9 @@ const totalCost = selectedTracksList.reduce((sum, track) => {
 
     const cheapestPrice = Math.min(...prices)
     return sum + cheapestPrice
-}, 0)
+  }, 0)
 
-const formattedTotalCost = formatCurrency(totalCost)
+  const formattedTotalCost = formatCurrency(totalCost)
 
   const handleBulkPurchase = async () => {
     if (selectedTracks.size === 0) return
@@ -195,17 +193,6 @@ const formattedTotalCost = formatCurrency(totalCost)
     a.download = `${playlistData.name.replace(/\s+/g, "_")}_purchase_links.csv`
     a.click()
     window.URL.revokeObjectURL(url)
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    )
   }
 
   if (!playlistData || tracks.length === 0) {

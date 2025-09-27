@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import { ArrowLeft, ExternalLink, CheckCircle, AlertCircle, Download, ShoppingCart } from "lucide-react"
+import { useSession } from "@supabase/auth-helpers-react"
 
 interface Track {
   id: string
@@ -39,23 +40,27 @@ interface PurchaseProgress {
   completedTracks: string[]
 }
 
+const parsePrice = (value?: string | null) => {
+  if (!value) return Number.POSITIVE_INFINITY
+  const numeric = value.replace(/[^0-9.,-]/g, "").replace(/,/g, "")
+  const amount = Number.parseFloat(numeric)
+  return Number.isNaN(amount) ? Number.POSITIVE_INFINITY : amount
+}
+
 export default function PurchasePage() {
   const [purchaseData, setPurchaseData] = useState<PurchaseData | null>(null)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [purchaseProgress, setPurchaseProgress] = useState<PurchaseProgress | null>(null)
   const [isPurchasing, setIsPurchasing] = useState(false)
   const [purchaseComplete, setPurchaseComplete] = useState(false)
   const [purchaseLinks, setPurchaseLinks] = useState<{ [key: string]: string }>({})
   const router = useRouter()
+  const session = useSession()
 
   useEffect(() => {
-    // Check authentication
-    const session = localStorage.getItem("playlist-session")
-    if (!session) {
-      router.push("/login")
+    if (session === null) {
+      router.replace("/login")
       return
     }
-    setIsAuthenticated(true)
 
     // Load purchase data
     const storedPurchaseData = localStorage.getItem("purchase-data")
@@ -63,12 +68,12 @@ export default function PurchasePage() {
       const data = JSON.parse(storedPurchaseData) as PurchaseData
       setPurchaseData(data)
     }
-  }, [router])
+  }, [router, session])
 
   const getBestVendor = (track: Track) => {
     return track.vendors
       .filter((v) => v.available)
-      .sort((a, b) => Number.parseFloat(a.price.replace("$", "")) - Number.parseFloat(b.price.replace("$", "")))[0]
+      .sort((a, b) => parsePrice(a.price) - parsePrice(b.price))[0]
   }
 
   const handleStartPurchase = async () => {
@@ -146,7 +151,7 @@ export default function PurchasePage() {
     router.push("/download")
   }
 
-  if (!isAuthenticated) {
+  if (!session) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">

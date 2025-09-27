@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -10,12 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { ArrowLeft, Settings, LogOut, Mail, Shield } from "lucide-react"
-
-interface AccountUser {
-  id: string
-  name: string
-  email: string
-}
+import { useSession, useSupabaseClient } from "@supabase/auth-helpers-react"
 
 interface UserSettings {
   emailNotifications: boolean
@@ -24,7 +19,6 @@ interface UserSettings {
 }
 
 export default function AccountPage() {
-  const [user, setUser] = useState<AccountUser | null>(null)
   const [settings, setSettings] = useState<UserSettings>({
     emailNotifications: true,
     preferredVendors: ["Apple Music", "Bandcamp"],
@@ -32,22 +26,23 @@ export default function AccountPage() {
   })
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const session = useSession()
+  const supabase = useSupabaseClient()
+
+  const displayName = useMemo(() => {
+    if (!session?.user) return ""
+    return session.user.user_metadata?.full_name || session.user.email?.split("@")[0] || ""
+  }, [session])
 
   useEffect(() => {
-    // Check authentication
-    const session = localStorage.getItem("playlist-session")
-    if (!session) {
-      router.push("/login")
-      return
+    if (session === null) {
+      router.replace("/login")
     }
+  }, [session, router])
 
-    const parsedSession = JSON.parse(session)
-    setUser(parsedSession.user)
-  }, [router])
-
-  const handleLogout = () => {
-    localStorage.removeItem("playlist-session")
-    router.push("/")
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.replace("/")
   }
 
   const handleSaveSettings = async () => {
@@ -58,7 +53,7 @@ export default function AccountPage() {
     // In a real app, you would save to backend
   }
 
-  if (!user) {
+  if (!session) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -101,11 +96,11 @@ export default function AccountPage() {
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Full Name</Label>
-                  <Input id="name" value={user.name} readOnly className="bg-muted/50" />
+                  <Input id="name" value={displayName} readOnly className="bg-muted/50" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" type="email" value={user.email} readOnly className="bg-muted/50" />
+                  <Input id="email" type="email" value={session.user?.email ?? ""} readOnly className="bg-muted/50" />
                 </div>
               </div>
               <p className="text-sm text-muted-foreground">Profile editing will be available in a future update</p>

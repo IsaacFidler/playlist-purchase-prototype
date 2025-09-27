@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Music, ArrowLeft } from "lucide-react"
+import { useSupabaseClient, useSession } from "@supabase/auth-helpers-react"
 
 export default function SignupPage() {
   const [name, setName] = useState("")
@@ -19,6 +20,14 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const supabase = useSupabaseClient()
+  const session = useSession()
+
+  useEffect(() => {
+    if (session) {
+      router.replace("/dashboard")
+    }
+  }, [session, router])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,23 +39,33 @@ export default function SignupPage() {
     }
 
     setIsLoading(true)
+    setError(null)
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    // Stub authentication - accept any values
-    const fakeSession = {
-      user: {
-        id: "1",
-        name: name,
-        email: email,
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: {
+          full_name: name,
+        },
       },
-      token: "fake-jwt-token",
+    })
+
+    if (signUpError) {
+      setError(signUpError.message)
+      setIsLoading(false)
+      return
     }
 
-    localStorage.setItem("playlist-session", JSON.stringify(fakeSession))
+    // Depending on project settings, Supabase may require email confirmation.
+    // If a session is returned immediately, redirect to dashboard; otherwise prompt user.
+    if (data.session) {
+      router.replace("/dashboard")
+    } else {
+      router.replace("/login?confirm=true")
+    }
+
     setIsLoading(false)
-    router.push("/dashboard")
   }
 
   return (

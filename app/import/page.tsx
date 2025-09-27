@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ArrowLeft, Music, CheckCircle, AlertCircle, PlugZap } from "lucide-react"
 
 import { createSpotifyAuthorizeUrl } from "@/lib/spotify"
+import { useSession } from "@supabase/auth-helpers-react"
 
 interface ImportProgress {
   step: string
@@ -50,20 +51,17 @@ function persistSpotifyAuth(payload: SpotifyAuthPayload) {
 export default function ImportPage() {
   const [playlistUrl, setPlaylistUrl] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [spotifyAuth, setSpotifyAuth] = useState<SpotifyAuthPayload | null>(null)
   const router = useRouter()
+  const session = useSession()
 
   useEffect(() => {
-    // Check authentication
-    const session = localStorage.getItem("playlist-session")
-    if (!session) {
-      router.push("/login")
+    if (session === null) {
+      router.replace("/login")
       return
     }
-    setIsAuthenticated(true)
 
     const storedAuth = loadSpotifyAuth()
     if (storedAuth) {
@@ -195,7 +193,7 @@ export default function ImportPage() {
     }
   }
 
-  if (!isAuthenticated) {
+  if (!session) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
