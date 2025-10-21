@@ -1,4 +1,5 @@
 import { drizzle } from "drizzle-orm/postgres-js"
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import * as schema from "./schema"
 
@@ -6,7 +7,7 @@ import * as schema from "./schema"
  * Lazy-loaded database instance
  * Only creates connection when first accessed, not at module load time
  */
-let dbInstance: ReturnType<typeof drizzle> | null = null
+let dbInstance: PostgresJsDatabase<typeof schema> | null = null
 
 /**
  * Get database instance, creating connection on first call
@@ -37,10 +38,10 @@ export function getDb() {
  * @deprecated Use getDb() instead to ensure lazy loading
  * This export is kept for backward compatibility but will be removed
  */
-export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+export const db = new Proxy({} as PostgresJsDatabase<typeof schema>, {
   get(_target, prop) {
     return (getDb() as any)[prop]
   },
 })
 
-export type DbClient = ReturnType<typeof getDb>
+export type DbClient = PostgresJsDatabase<typeof schema>

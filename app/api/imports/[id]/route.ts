@@ -25,7 +25,7 @@ export async function GET(
       return NextResponse.json({ error: "Playlist import not found" }, { status: 404 })
     }
 
-    const tracks = record.tracks.map((track) => ({
+    const tracks = record.tracks.map((track: typeof record.tracks[number]) => ({
     id: track.id,
     name: track.name,
     artist: track.artists,
@@ -36,7 +36,7 @@ export async function GET(
     spotifyUrl: track.spotifyTrackUrl ?? undefined,
     isrc: track.isrc,
     orderIndex: track.orderIndex,
-    vendors: track.offers.map((offer) => ({
+    vendors: track.offers.map((offer: typeof track.offers[number]) => ({
       id: offer.vendorId,
       name: offer.vendor?.displayName ?? offer.vendorId,
       vendorId: offer.vendorId,
