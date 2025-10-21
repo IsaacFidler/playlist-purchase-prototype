@@ -12,51 +12,66 @@ import type { NextRequest } from "next/server"
  */
 
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req, res })
+  try {
+    const res = NextResponse.next()
 
-  // Get the current session
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    // Check for required Supabase environment variables
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error('[middleware] Missing required Supabase environment variables')
+      console.error('Required: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY')
+      // Allow request through but log error - prevents complete site failure
+      return res
+    }
 
-  const { pathname } = req.nextUrl
+    const supabase = createMiddlewareClient({ req, res })
 
-  // Define protected routes that require authentication
-  const protectedRoutes = [
-    '/dashboard',
-    '/import',
-    '/review',
-    '/purchase',
-    '/download',
-    '/account',
-  ]
+    // Get the current session
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
 
-  // Define public routes that don't require authentication
-  const publicRoutes = ['/', '/login', '/signup', '/auth/callback']
+    const { pathname } = req.nextUrl
 
-  // Check if the current path starts with any protected route
-  const isProtectedRoute = protectedRoutes.some((route) =>
-    pathname.startsWith(route)
-  )
+    // Define protected routes that require authentication
+    const protectedRoutes = [
+      '/dashboard',
+      '/import',
+      '/review',
+      '/purchase',
+      '/download',
+      '/account',
+    ]
 
-  // Check if the current path starts with any public route
-  const isPublicRoute = publicRoutes.some((route) => pathname === route)
+    // Define public routes that don't require authentication
+    const publicRoutes = ['/', '/login', '/signup', '/auth/callback']
 
-  // If accessing a protected route without a session, redirect to login
-  if (isProtectedRoute && !session) {
-    const redirectUrl = new URL('/login', req.url)
-    // Preserve the intended destination for redirect after login
-    redirectUrl.searchParams.set('redirectTo', pathname)
-    return NextResponse.redirect(redirectUrl)
+    // Check if the current path starts with any protected route
+    const isProtectedRoute = protectedRoutes.some((route) =>
+      pathname.startsWith(route)
+    )
+
+    // Check if the current path starts with any public route
+    const isPublicRoute = publicRoutes.some((route) => pathname === route)
+
+    // If accessing a protected route without a session, redirect to login
+    if (isProtectedRoute && !session) {
+      const redirectUrl = new URL('/login', req.url)
+      // Preserve the intended destination for redirect after login
+      redirectUrl.searchParams.set('redirectTo', pathname)
+      return NextResponse.redirect(redirectUrl)
+    }
+
+    // If accessing login/signup while already logged in, redirect to dashboard
+    if ((pathname === '/login' || pathname === '/signup') && session) {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
+    }
+
+    return res
+  } catch (error) {
+    console.error('[middleware] Error:', error)
+    // Return the response to prevent complete failure
+    return NextResponse.next()
   }
-
-  // If accessing login/signup while already logged in, redirect to dashboard
-  if ((pathname === '/login' || pathname === '/signup') && session) {
-    return NextResponse.redirect(new URL('/dashboard', req.url))
-  }
-
-  return res
 }
 
 /**
