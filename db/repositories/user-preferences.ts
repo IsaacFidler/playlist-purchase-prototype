@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm"
 
-import { db } from "@/db/client"
+import { getDb } from "@/db/client"
 import { userPreferences } from "@/db/schema"
 import { preferencesSchema } from "@/lib/validators/preferences"
 
@@ -11,14 +11,14 @@ const defaultPreferences = {
 }
 
 export async function ensureUserPreferences(userId: string) {
-  const existing = await db
+  const existing = await getDb()
     .select()
     .from(userPreferences)
     .where(eq(userPreferences.userId, userId))
     .limit(1)
 
   if (existing.length === 0) {
-    await db.insert(userPreferences).values({
+    await getDb().insert(userPreferences).values({
       userId,
       emailNotifications: true,
       autoExport: false,
@@ -30,7 +30,7 @@ export async function ensureUserPreferences(userId: string) {
 export async function getUserPreferences(userId: string) {
   await ensureUserPreferences(userId)
 
-  const [preferences] = await db
+  const [preferences] = await getDb()
     .select()
     .from(userPreferences)
     .where(eq(userPreferences.userId, userId))
@@ -48,7 +48,7 @@ export async function updateUserPreferences(userId: string, payload: unknown) {
 
   await ensureUserPreferences(userId)
 
-  await db
+  await getDb()
     .update(userPreferences)
     .set({
       emailNotifications: parsed.emailNotifications,

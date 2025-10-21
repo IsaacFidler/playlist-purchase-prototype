@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server"
 
-import { db } from "@/db/client"
+import { getDb } from "@/db/client"
 import { vendors } from "@/db/schema"
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const results = await db
+  const results = await getDb()
     .select({
       id: vendors.id,
       displayName: vendors.displayName,

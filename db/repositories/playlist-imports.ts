@@ -3,7 +3,7 @@ import type { ExtractTablesWithRelations } from "drizzle-orm"
 import type { PgTransaction } from "drizzle-orm/pg-core"
 import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js"
 
-import { db } from "@/db/client"
+import { getDb } from "@/db/client"
 import type { DbClient } from "@/db/client"
 import {
   importActivities,
@@ -96,7 +96,7 @@ const parsePriceString = (price?: string | null) => {
 const ensureProfile = async (userId: string, email?: string | null) => {
   if (!userId) return
 
-  await db
+  await getDb()
     .insert(profiles)
     .values({
       id: userId,
@@ -167,7 +167,7 @@ export async function createPlaylistImport({
     return count + availableVendors.length
   }, 0)
 
-  await db.transaction(async (tx) => {
+  await getDb().transaction(async (tx) => {
     await tx.execute(sql`select set_config('statement_timeout', '60000', true)`)
     console.info("[imports] inserting playlist row", { playlistId })
     await tx.insert(playlistImports).values({
@@ -261,7 +261,7 @@ export async function createPlaylistImport({
 }
 
 export async function listPlaylistImports(userId: string) {
-  const items = await db
+  const items = await getDb()
     .select({
       id: playlistImports.id,
       name: playlistImports.name,
@@ -280,7 +280,7 @@ export async function listPlaylistImports(userId: string) {
 }
 
 export async function getPlaylistImport({ userId, importId }: { userId: string; importId: string }) {
-  const record = await db.query.playlistImports.findFirst({
+  const record = await getDb().query.playlistImports.findFirst({
     where: and(eq(playlistImports.id, importId), eq(playlistImports.userId, userId)),
     with: {
       tracks: {
@@ -315,7 +315,7 @@ export async function logImportActivity({
   metadata?: Record<string, unknown>
   message?: string | null
 }) {
-  await db.insert(importActivities).values({
+  await getDb().insert(importActivities).values({
     id: crypto.randomUUID(),
     importId,
     eventType,
@@ -333,7 +333,7 @@ export async function savePurchaseSelection({
   importId: string
   payload: SelectionPayload
 }) {
-  const playlist = await db.query.playlistImports.findFirst({
+  const playlist = await getDb().query.playlistImports.findFirst({
     where: and(eq(playlistImports.id, importId), eq(playlistImports.userId, userId)),
     columns: {
       id: true,
@@ -364,7 +364,7 @@ export async function getLatestPurchaseSelection({
   userId: string
   importId: string
 }) {
-  const playlist = await db
+  const playlist = await getDb()
     .select({ userId: playlistImports.userId })
     .from(playlistImports)
     .where(eq(playlistImports.id, importId))
@@ -374,7 +374,7 @@ export async function getLatestPurchaseSelection({
     return null
   }
 
-  const activities = await db
+  const activities = await getDb()
     .select()
     .from(importActivities)
     .where(
@@ -386,7 +386,7 @@ export async function getLatestPurchaseSelection({
     .orderBy(desc(importActivities.createdAt))
     .limit(1)
 
-  const fallbacks = await db
+  const fallbacks = await getDb()
     .select()
     .from(importActivities)
     .where(

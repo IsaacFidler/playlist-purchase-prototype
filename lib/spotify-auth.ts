@@ -6,7 +6,7 @@
  * localStorage, providing better security and automatic refresh capability.
  */
 
-import { db } from "@/db/client"
+import { getDb } from "@/db/client"
 import { spotifyAccounts } from "@/db/schema"
 import { eq } from "drizzle-orm"
 
@@ -29,7 +29,7 @@ interface SpotifyTokenData {
  */
 export async function getSpotifyToken(userId: string): Promise<string | null> {
   try {
-    const account = await db.query.spotifyAccounts.findFirst({
+    const account = await getDb().query.spotifyAccounts.findFirst({
       where: eq(spotifyAccounts.userId, userId),
     })
 
@@ -78,7 +78,7 @@ export async function saveSpotifyToken(
   data: SpotifyTokenData
 ): Promise<void> {
   try {
-    await db
+    await getDb()
       .insert(spotifyAccounts)
       .values({
         id: `spotify_${userId}`,
@@ -149,7 +149,7 @@ async function refreshSpotifyToken(
       console.error(`[spotify-auth] Token refresh failed:`, errorText)
 
       // Update account with error
-      await db
+      await getDb()
         .update(spotifyAccounts)
         .set({
           lastError: `Token refresh failed: ${response.statusText}`,
@@ -178,7 +178,7 @@ async function refreshSpotifyToken(
     console.error(`[spotify-auth] Error refreshing token:`, error)
 
     // Update account with error
-    await db
+    await getDb()
       .update(spotifyAccounts)
       .set({
         lastError: error instanceof Error ? error.message : "Token refresh error",
@@ -197,7 +197,7 @@ async function refreshSpotifyToken(
  */
 export async function deleteSpotifyAccount(userId: string): Promise<void> {
   try {
-    await db.delete(spotifyAccounts).where(eq(spotifyAccounts.userId, userId))
+    await getDb().delete(spotifyAccounts).where(eq(spotifyAccounts.userId, userId))
     console.info(`[spotify-auth] Deleted Spotify account for user ${userId}`)
   } catch (error) {
     console.error(`[spotify-auth] Error deleting Spotify account:`, error)
@@ -213,7 +213,7 @@ export async function deleteSpotifyAccount(userId: string): Promise<void> {
  */
 export async function hasSpotifyAccount(userId: string): Promise<boolean> {
   try {
-    const account = await db.query.spotifyAccounts.findFirst({
+    const account = await getDb().query.spotifyAccounts.findFirst({
       where: eq(spotifyAccounts.userId, userId),
     })
     return !!account
