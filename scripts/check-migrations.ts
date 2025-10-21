@@ -1,19 +1,18 @@
-import { drizzle } from "drizzle-orm/postgres-js"
-import postgres from "postgres"
-import * as dotenv from "dotenv"
+import * as dotenv from "dotenv";
+import postgres from "postgres";
 
 // Load environment variables
-dotenv.config({ path: ".env.local" })
+dotenv.config({ path: ".env.local" });
 
-const DATABASE_URL = process.env.DATABASE_URL
+const DATABASE_URL = process.env.DATABASE_URL;
 
 if (!DATABASE_URL) {
-  console.error("❌ DATABASE_URL environment variable is not set")
-  process.exit(1)
+  console.error("❌ DATABASE_URL environment variable is not set");
+  process.exit(1);
 }
 
 async function checkMigrations() {
-  const client = postgres(DATABASE_URL, { max: 1 })
+  const client = postgres(DATABASE_URL!, { max: 1 });
 
   try {
     // Check if drizzle_migrations table exists
@@ -23,27 +22,27 @@ async function checkMigrations() {
         WHERE table_schema = 'public'
         AND table_name = 'drizzle_migrations'
       ) as exists
-    `
+    `;
 
-    console.log("📋 Drizzle migrations table exists:", tableExists[0].exists)
+    console.log("📋 Drizzle migrations table exists:", tableExists[0].exists);
 
     if (tableExists[0].exists) {
       // Show what migrations are tracked
       const migrations = await client`
         SELECT * FROM drizzle_migrations ORDER BY id
-      `
+      `;
 
-      console.log("\n✅ Tracked migrations:")
+      console.log("\n✅ Tracked migrations:");
       if (migrations.length === 0) {
-        console.log("  (none)")
+        console.log("  (none)");
       } else {
         migrations.forEach((m) => {
-          console.log(`  - ${m.hash} (created at: ${m.created_at})`)
-        })
+          console.log(`  - ${m.hash} (created at: ${m.created_at})`);
+        });
       }
     } else {
-      console.log("\n⚠️  Drizzle migrations table doesn't exist yet")
-      console.log("   It will be created on first migration run")
+      console.log("\n⚠️  Drizzle migrations table doesn't exist yet");
+      console.log("   It will be created on first migration run");
     }
 
     // Check if the enum exists (indicates 0001 was applied)
@@ -52,17 +51,16 @@ async function checkMigrations() {
         SELECT FROM pg_type
         WHERE typname = 'import_event_type'
       ) as exists
-    `
+    `;
 
-    console.log("\n🔍 Database state:")
-    console.log("  - import_event_type enum exists:", enumExists[0].exists)
-
+    console.log("\n🔍 Database state:");
+    console.log("  - import_event_type enum exists:", enumExists[0].exists);
   } catch (error) {
-    console.error("❌ Error checking migrations:", error)
-    process.exit(1)
+    console.error("❌ Error checking migrations:", error);
+    process.exit(1);
   } finally {
-    await client.end()
+    await client.end();
   }
 }
 
-checkMigrations()
+checkMigrations();
