@@ -40,9 +40,11 @@ interface CompletedPurchase {
     album: string
     duration: string
     vendors: Array<{
+      id: string
       name: string
+      vendorId: string
       url: string
-      price: string
+      price?: string
       available: boolean
     }>
   }>

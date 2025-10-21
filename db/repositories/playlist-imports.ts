@@ -1,6 +1,10 @@
 import { and, desc, eq, sql } from "drizzle-orm"
+import type { ExtractTablesWithRelations } from "drizzle-orm"
+import type { PgTransaction } from "drizzle-orm/pg-core"
+import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js"
 
 import { db } from "@/db/client"
+import type { DbClient } from "@/db/client"
 import {
   importActivities,
   playlistImports,
@@ -9,8 +13,17 @@ import {
   vendorOffers,
   vendors,
 } from "@/db/schema"
+import type * as schema from "@/db/schema"
 import { PlaylistPayload, SelectionPayload, TrackPayload } from "@/lib/validators/imports"
 import { ensureUserPreferences } from "./user-preferences"
+
+type DbOrTransaction =
+  | DbClient
+  | PgTransaction<
+      PostgresJsQueryResultHKT,
+      typeof schema,
+      ExtractTablesWithRelations<typeof schema>
+    >
 
 type ImportEventType = (typeof importActivities.eventType)["enumValues"][number]
 
@@ -102,7 +115,7 @@ const ensureVendor = async (name: string) => {
   return id
 }
 
-const getVendorIds = async (tx: typeof db, uniqueNames: string[]) => {
+const getVendorIds = async (tx: DbOrTransaction, uniqueNames: string[]) => {
   if (uniqueNames.length === 0) return new Map<string, string>()
 
   const vendorEntries = uniqueNames.map((name) => {
@@ -214,7 +227,7 @@ export async function createPlaylistImport({
           externalId: null,
           externalUrl: vendor.url,
           currencyCode: currency,
-          priceValue: amount,
+          priceValue: amount !== null ? amount.toString() : null,
           availability: vendor.available === false ? "UNAVAILABLE" : "AVAILABLE",
           isPreview: false,
           countryCode: null,
@@ -239,7 +252,7 @@ export async function createPlaylistImport({
 
     if (offerRows.length > 0) {
       console.info("[imports] bulk inserting offers", { count: offerRows.length })
-      await tx.insert(vendorOffers).values(offerRows).onConflictDoNothing({ target: vendorOffers.trackVendorUnique })
+      await tx.insert(vendorOffers).values(offerRows).onConflictDoNothing({ target: [vendorOffers.trackId, vendorOffers.vendorId] })
     }
   })
 
