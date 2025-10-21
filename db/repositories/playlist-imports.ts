@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, sql } from "drizzle-orm"
 
 import { db } from "@/db/client"
 import {
@@ -10,6 +10,7 @@ import {
   vendors,
 } from "@/db/schema"
 import { PlaylistPayload, SelectionPayload, TrackPayload } from "@/lib/validators/imports"
+import { ensureUserPreferences } from "./user-preferences"
 
 type ImportEventType = (typeof importActivities.eventType)["enumValues"][number]
 
@@ -96,20 +97,36 @@ const ensureProfile = async (userId: string, email?: string | null) => {
 const ensureVendor = async (name: string) => {
   const key = name.toLowerCase()
   const preset = KNOWN_VENDORS[key]
-  const id = preset?.id ?? slugify(name).slice(0, 32) || "vendor"
+  const fallbackId = slugify(name).slice(0, 32) || "vendor"
+  const id = preset?.id ?? fallbackId
+  return id
+}
 
-  await db
-    .insert(vendors)
-    .values({
-      id,
+const getVendorIds = async (tx: typeof db, uniqueNames: string[]) => {
+  if (uniqueNames.length === 0) return new Map<string, string>()
+
+  const vendorEntries = uniqueNames.map((name) => {
+    const key = name.toLowerCase()
+    const preset = KNOWN_VENDORS[key]
+    const fallbackId = slugify(name).slice(0, 32) || "vendor"
+    return {
+      id: preset?.id ?? fallbackId,
       displayName: preset?.displayName ?? name,
       primaryColor: preset?.primaryColor,
       secondaryColor: preset?.secondaryColor,
       websiteUrl: preset?.websiteUrl,
-    })
+    }
+  })
+
+  await tx
+    .insert(vendors)
+    .values(vendorEntries)
     .onConflictDoNothing({ target: vendors.id })
 
-  return id
+  const vendorMap = new Map<string, string>()
+  vendorEntries.forEach((entry) => vendorMap.set(entry.displayName, entry.id))
+
+  return vendorMap
 }
 
 export async function createPlaylistImport({
@@ -122,6 +139,13 @@ export async function createPlaylistImport({
   playlist: PlaylistPayload
 }) {
   await ensureProfile(userId, userEmail)
+  await ensureUserPreferences(userId)
+
+  console.info("[imports] createPlaylistImport:start", {
+    userId,
+    playlistName: playlist.name,
+    trackCount: playlist.tracks.length,
+  })
 
   const playlistId = crypto.randomUUID()
 
@@ -131,6 +155,8 @@ export async function createPlaylistImport({
   }, 0)
 
   await db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('statement_timeout', '60000', true)`)
+    console.info("[imports] inserting playlist row", { playlistId })
     await tx.insert(playlistImports).values({
       id: playlistId,
       userId,
@@ -146,10 +172,17 @@ export async function createPlaylistImport({
       availableOffers: trackOffersAvailability,
     })
 
-    for (const track of playlist.tracks) {
-      const trackId = track.id || crypto.randomUUID()
+    const trackRows: (typeof playlistTracks.$inferInsert)[] = []
+    const offerRows: (typeof vendorOffers.$inferInsert)[] = []
 
-      await tx.insert(playlistTracks).values({
+    const uniqueVendors = Array.from(
+      new Set(playlist.tracks.flatMap((track) => track.vendors.map((vendor) => vendor.name))),
+    )
+    const vendorMap = await getVendorIds(tx, uniqueVendors)
+
+    for (const track of playlist.tracks) {
+      const trackId = crypto.randomUUID()
+      trackRows.push({
         id: trackId,
         importId: playlistId,
         orderIndex: track.orderIndex ?? 0,
@@ -169,35 +202,48 @@ export async function createPlaylistImport({
       })
 
       for (const vendor of track.vendors) {
-        const vendorId = await ensureVendor(vendor.name)
+        const vendorId = vendorMap.get(vendor.name) ?? (await ensureVendor(vendor.name))
         const { amount, currency } = parsePriceString(vendor.price)
 
-        await tx
-          .insert(vendorOffers)
-          .values({
-            id: crypto.randomUUID(),
-            trackId,
-            vendorId,
-            title: track.name,
-            subtitle: track.artist,
-            externalId: null,
-            externalUrl: vendor.url,
-            currencyCode: currency,
-            priceValue: amount,
-            availability: vendor.available === false ? "UNAVAILABLE" : "AVAILABLE",
-            isPreview: false,
-            countryCode: null,
-            releaseDate: null,
-            rawPayload: {
-              vendorName: vendor.name,
-              price: vendor.price,
-            },
-          })
-          .onConflictDoNothing({ target: [vendorOffers.trackId, vendorOffers.vendorId] })
+        offerRows.push({
+          id: crypto.randomUUID(),
+          trackId,
+          vendorId,
+          title: track.name,
+          subtitle: track.artist,
+          externalId: null,
+          externalUrl: vendor.url,
+          currencyCode: currency,
+          priceValue: amount,
+          availability: vendor.available === false ? "UNAVAILABLE" : "AVAILABLE",
+          isPreview: false,
+          countryCode: null,
+          releaseDate: null,
+          rawPayload: {
+            vendorName: vendor.name,
+            price: vendor.price,
+          },
+        })
       }
+    }
+
+    if (trackRows.length > 0) {
+      console.info("[imports] bulk inserting tracks", { count: trackRows.length })
+      try {
+        await tx.insert(playlistTracks).values(trackRows)
+      } catch (error) {
+        console.error("[imports] failed to insert tracks", { error })
+        throw error
+      }
+    }
+
+    if (offerRows.length > 0) {
+      console.info("[imports] bulk inserting offers", { count: offerRows.length })
+      await tx.insert(vendorOffers).values(offerRows).onConflictDoNothing({ target: vendorOffers.trackVendorUnique })
     }
   })
 
+  console.info("[imports] createPlaylistImport:complete", { playlistId })
   return playlistId
 }
 

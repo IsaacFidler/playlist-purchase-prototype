@@ -9,16 +9,26 @@ import { Badge } from "@/components/ui/badge"
 import { Plus, Music, Calendar, ExternalLink } from "lucide-react"
 import { useSession } from "@supabase/auth-helpers-react"
 
-interface PlaylistActivity {
+interface PlaylistSummary {
   id: string
   name: string
-  trackCount: number
-  date: string
-  status: "completed" | "in-progress" | "pending"
+  description: string | null
+  status: string
+  totalTracks: number
+  matchedTracks: number
+  availableOffers: number
+  createdAt: string
+}
+
+type DashboardStat = {
+  label: string
+  value: number
+  helper: string
 }
 
 export default function DashboardPage() {
-  const [recentActivity, setRecentActivity] = useState<PlaylistActivity[]>([])
+  const [imports, setImports] = useState<PlaylistSummary[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
   const session = useSession()
 
@@ -33,62 +43,100 @@ export default function DashboardPage() {
     if (session === null) {
       router.replace("/login")
       return
+      return
     }
 
-    // Mock recent activity data
-    setRecentActivity([
-      {
-        id: "1",
-        name: "Summer Vibes 2024",
-        trackCount: 32,
-        date: "2024-01-15",
-        status: "completed",
-      },
-      {
-        id: "2",
-        name: "Deep House Essentials",
-        trackCount: 28,
-        date: "2024-01-12",
-        status: "in-progress",
-      },
-      {
-        id: "3",
-        name: "Indie Rock Classics",
-        trackCount: 45,
-        date: "2024-01-10",
-        status: "completed",
-      },
-      {
-        id: "4",
-        name: "Chill Study Beats",
-        trackCount: 18,
-        date: "2024-01-08",
-        status: "pending",
-      },
-    ])
-  }, [router])
+    const controller = new AbortController()
 
-  if (!session) {
+    const loadImports = async () => {
+      try {
+        setIsLoading(true)
+        const response = await fetch("/api/imports", { signal: controller.signal })
+        if (!response.ok) {
+          throw new Error("Failed to load playlist imports")
+        }
+        const data = await response.json()
+        setImports(data.imports ?? [])
+      } catch (error) {
+        console.error(error)
+        setImports([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadImports()
+
+    return () => controller.abort()
+  }, [router, session])
+
+  if (!session || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-muted-foreground">Loading...</p>
+          <p className="mt-2 text-muted-foreground">Loading dashboard...</p>
         </div>
       </div>
     )
   }
 
+  const monthAgo = new Date()
+  monthAgo.setMonth(monthAgo.getMonth() - 1)
+
+  const monthImports = imports.filter((item) => new Date(item.createdAt) >= monthAgo)
+  const stats: DashboardStat[] = [
+    {
+      label: "Total Playlists",
+      value: imports.length,
+      helper: `+${monthImports.length} in the last 30 days`,
+    },
+    {
+      label: "Tracks Processed",
+      value: imports.reduce((sum, item) => sum + item.matchedTracks, 0),
+      helper: `${monthImports.reduce((sum, item) => sum + item.matchedTracks, 0)} added recently`,
+    },
+    {
+      label: "Purchase Links",
+      value: imports.reduce((sum, item) => sum + item.availableOffers, 0),
+      helper: `${monthImports.reduce((sum, item) => sum + item.availableOffers, 0)} new this month`,
+    },
+  ]
+
+  const recentActivity = imports
+    .slice()
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5)
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "completed":
+      case "READY":
         return "bg-[#00FF9D]/10 text-[#00FF9D] border-[#00FF9D]/20"
-      case "in-progress":
+      case "PROCESSING":
         return "bg-blue-500/10 text-blue-500 border-blue-500/20"
-      case "pending":
+      case "QUEUED":
         return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
+      case "FAILED":
+        return "bg-red-500/10 text-red-500 border-red-500/20"
       default:
         return "bg-muted text-muted-foreground"
+    }
+  }
+
+  const statusLabel = (status: string) => {
+    switch (status) {
+      case "READY":
+        return "ready"
+      case "PROCESSING":
+        return "processing"
+      case "QUEUED":
+        return "queued"
+      case "FAILED":
+        return "failed"
+      case "ARCHIVED":
+        return "archived"
+      default:
+        return status.toLowerCase()
     }
   }
 
@@ -113,35 +161,17 @@ export default function DashboardPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        <Card className="w-full border-border/50 bg-card/50 backdrop-blur">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Playlists</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">12</div>
-            <p className="text-xs text-muted-foreground">+2 this month</p>
-          </CardContent>
-        </Card>
-
-        <Card className="w-full border-border/50 bg-card/50 backdrop-blur">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Tracks Processed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">347</div>
-            <p className="text-xs text-muted-foreground">+28 this week</p>
-          </CardContent>
-        </Card>
-
-        <Card className="w-full border-border/50 bg-card/50 backdrop-blur">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Purchase Links</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">289</div>
-            <p className="text-xs text-muted-foreground">83% success rate</p>
-          </CardContent>
-        </Card>
+        {stats.map((stat) => (
+          <Card key={stat.label} className="w-full border-border/50 bg-card/50 backdrop-blur">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">{stat.label}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stat.value}</div>
+              <p className="text-xs text-muted-foreground">{stat.helper}</p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Recent Activity */}
@@ -174,26 +204,24 @@ export default function DashboardPage() {
                     <div>
                       <h3 className="font-medium">{playlist.name}</h3>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span>{playlist.trackCount} tracks</span>
+                        <span>{playlist.totalTracks} tracks</span>
                         <span>•</span>
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {new Date(playlist.date).toLocaleDateString()}
+                          {new Date(playlist.createdAt).toLocaleDateString()}
                         </div>
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <Badge variant="outline" className={getStatusColor(playlist.status)}>
-                      {playlist.status}
+                      {statusLabel(playlist.status)}
                     </Badge>
-                    {playlist.status === "completed" && (
-                      <Link href="/review">
-                        <Button variant="ghost" size="sm">
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                    )}
+                    <Link href={`/review?importId=${playlist.id}`}>
+                      <Button variant="ghost" size="sm">
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               ))}

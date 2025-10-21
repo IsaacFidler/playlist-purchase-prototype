@@ -24,6 +24,9 @@ Create typed helpers in `db/` (e.g. `db/repositories/playlist.ts`):
 
 Utilities should share TypeScript types derived from `db/schema.ts` and expose Zod schemas (under `lib/validators/`) for payload validation.
 
+Account preferences live in `user_preferences`, surfaced via `db/repositories/user-preferences.ts` and `lib/validators/preferences.ts`.
+
+
 ### 2.2 API Routes (App Router)
 
 | Route | Method | Description |
@@ -34,6 +37,7 @@ Utilities should share TypeScript types derived from `db/schema.ts` and expose Z
 | `/api/imports/[id]` | `PATCH` | Allows updating status (`PROCESSING`, `READY`, `FAILED`, `ARCHIVED`) and user notes; logs activity.
 | `/api/imports/[id]/selection` | `POST` | Persists selected track IDs + totals for purchase flow (stored in `import_activities` or new `purchase_sessions` table if needed).
 | `/api/imports/[id]/selection` | `GET` | Retrieves the last saved selection to hydrate purchase/download pages.
+| `/api/account/preferences` | `GET` / `PUT` | Reads and updates per-user notification/export/vendor settings. 
 
 Implementation details:
 
@@ -72,12 +76,50 @@ Implementation details:
 - Add Supabase RLS policies once we finish wiring server routes.
 - Instrument vendor re-sync endpoints (`POST /api/vendors/resync`) to refresh prices asynchronously (future iteration).
 
-## 3. Execution Order
+## 3. Execution Order & Status
 
-1. Scaffold repositories + validators (step 2 above).
-2. Implement API routes incrementally (`POST /api/imports` first, then `GET /api/imports/[id]`, etc.).
-3. Refactor front-end pages to call the new APIs and remove `localStorage` usage.
-4. Clean up mocks, update docs/tests, seed vendor table data.
-5. Add activity logging + optional purchase selection persistence.
+### ✅ Completed
 
-This roadmap aligns with the updated plan and should unblock the remaining migration away from dummy data.
+1. ✅ **Scaffold repositories + validators**
+   - Created `db/repositories/playlist-imports.ts` with all CRUD functions
+   - Created `db/repositories/user-preferences.ts`
+   - Created validators in `lib/validators/` (imports, preferences)
+
+2. ✅ **Implement core API routes**
+   - ✅ `POST /api/imports` — Persists playlist imports to database
+   - ✅ `GET /api/imports` — Lists user's imports
+   - ✅ `GET /api/imports/[id]` — Retrieves full import with tracks/offers
+   - ✅ `PATCH /api/imports/[id]` — Updates import status/notes
+   - ✅ `POST /api/imports/[id]/selection` — Persists purchase selection
+   - ✅ `GET /api/imports/[id]/selection` — Retrieves saved selection
+   - ✅ `GET/PUT /api/account/preferences` — User preferences management
+
+3. ✅ **Partial front-end migration**
+   - ✅ `app/import/page.tsx` now calls `POST /api/imports` and redirects with `importId`
+   - ✅ Removed `localStorage.setItem("current-playlist")` from import flow
+   - ✅ Dashboard displays real imports from `GET /api/imports`
+
+4. ✅ **Infrastructure**
+   - ✅ Vendor table seeding via `KNOWN_VENDORS` preset in repository
+   - ✅ Activity logging implemented via `logImportActivity()`
+   - ✅ User preferences auto-creation on first access
+
+### 🚧 In Progress
+
+1. **Review Page Migration**
+   - Currently reads from `?importId` query param but may still use localStorage fallback
+   - Need to fully migrate to server-side data fetching via `GET /api/imports/[id]`
+
+2. **Purchase/Download Pages**
+   - Need to migrate from localStorage to `GET /api/imports/[id]/selection`
+   - Purchase selection persistence API exists but frontend integration pending
+
+### 📋 Remaining Work
+
+1. Complete removal of `localStorage` usage for playlist data in review/purchase/download pages
+2. Add Supabase RLS policies for row-level security
+3. Clean up any remaining mocks or dummy data
+4. Test full flow end-to-end with database persistence
+5. Document final API surface in technical architecture doc (✅ already done)
+
+This roadmap is mostly complete. The core persistence infrastructure is in place; remaining work is frontend migration to fully utilize the APIs.

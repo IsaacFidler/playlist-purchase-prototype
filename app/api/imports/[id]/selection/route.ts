@@ -7,34 +7,54 @@ import {
 import { createRouteClient } from "@/lib/supabase-server"
 import { selectionPayloadSchema } from "@/lib/validators/imports"
 
+interface SelectionMetadata {
+  trackIds?: string[]
+  totalCost?: number
+  purchaseLinks?: Record<string, string> | null
+  status?: "draft" | "completed"
+  savedAt?: string
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: { id: string } },
 ) {
-  const supabase = createRouteClient()
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+  try {
+    const supabase = createRouteClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const entry = await getLatestPurchaseSelection({ userId: user.id, importId: params.id })
+
+    if (!entry) {
+      return NextResponse.json({ selection: null })
+    }
+
+    const metadata = entry.metadata as SelectionMetadata | null
+
+    return NextResponse.json({
+      selection: {
+        trackIds: metadata?.trackIds ?? [],
+        totalCost: metadata?.totalCost ?? 0,
+        purchaseLinks: metadata?.purchaseLinks ?? null,
+        status: metadata?.status ?? "draft",
+        savedAt: metadata?.savedAt ?? entry.createdAt,
+      },
+    })
+  } catch (error) {
+    console.error("[API /api/imports/[id]/selection GET] Error:", error)
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Failed to load selection",
+      },
+      { status: 500 }
+    )
   }
-
-  const entry = await getLatestPurchaseSelection({ userId: session.user.id, importId: params.id })
-
-  if (!entry) {
-    return NextResponse.json({ selection: null })
-  }
-
-  return NextResponse.json({
-    selection: {
-      trackIds: (entry.metadata as any)?.trackIds ?? [],
-      totalCost: (entry.metadata as any)?.totalCost ?? 0,
-      purchaseLinks: (entry.metadata as any)?.purchaseLinks ?? null,
-      status: (entry.metadata as any)?.status ?? "draft",
-      savedAt: (entry.metadata as any)?.savedAt ?? entry.createdAt,
-    },
-  })
 }
 
 export async function POST(
@@ -43,10 +63,10 @@ export async function POST(
 ) {
   const supabase = createRouteClient()
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -62,7 +82,7 @@ export async function POST(
 
   try {
     await savePurchaseSelection({
-      userId: session.user.id,
+      userId: user.id,
       importId: params.id,
       payload: parsed.data,
     })

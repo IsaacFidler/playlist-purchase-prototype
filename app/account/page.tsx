@@ -18,13 +18,16 @@ interface UserSettings {
   autoExport: boolean
 }
 
+interface VendorOption {
+  id: string
+  displayName: string
+}
+
 export default function AccountPage() {
-  const [settings, setSettings] = useState<UserSettings>({
-    emailNotifications: true,
-    preferredVendors: ["Apple Music", "Bandcamp"],
-    autoExport: false,
-  })
+  const [settings, setSettings] = useState<UserSettings | null>(null)
+  const [vendorOptions, setVendorOptions] = useState<VendorOption[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isFetching, setIsFetching] = useState(true)
   const router = useRouter()
   const session = useSession()
   const supabase = useSupabaseClient()
@@ -40,7 +43,51 @@ export default function AccountPage() {
   useEffect(() => {
     if (session === null) {
       router.replace("/login")
+      return
     }
+
+    const controller = new AbortController()
+
+    const loadData = async () => {
+      try {
+        setIsFetching(true)
+        const [preferencesResponse, vendorsResponse] = await Promise.all([
+          fetch("/api/account/preferences", { signal: controller.signal }),
+          fetch("/api/vendors", { signal: controller.signal }).catch(() => null),
+        ])
+
+        if (preferencesResponse.ok) {
+          const { preferences } = await preferencesResponse.json()
+          setSettings({
+            emailNotifications: preferences?.emailNotifications ?? true,
+            autoExport: preferences?.autoExport ?? false,
+            preferredVendors: preferences?.preferredVendors ?? [],
+          })
+        } else {
+          setSettings({ emailNotifications: true, preferredVendors: [], autoExport: false })
+        }
+
+        if (vendorsResponse?.ok) {
+          const { vendors } = await vendorsResponse.json()
+          setVendorOptions(vendors ?? [])
+        } else {
+          setVendorOptions([
+            { id: "itunes", displayName: "Apple iTunes" },
+            { id: "bandcamp", displayName: "Bandcamp" },
+            { id: "discogs", displayName: "Discogs" },
+          ])
+        }
+      } catch (error) {
+        console.error("Failed to load account data", error)
+        setSettings({ emailNotifications: true, preferredVendors: [], autoExport: false })
+      } finally {
+        setIsFetching(false)
+      }
+    }
+
+    loadData()
+
+    return () => controller.abort()
   }, [session, router])
 
   const handleLogout = async () => {
@@ -49,19 +96,34 @@ export default function AccountPage() {
   }
 
   const handleSaveSettings = async () => {
-    setIsLoading(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsLoading(false)
-    // In a real app, you would save to backend
+    if (!settings) return
+
+    try {
+      setIsLoading(true)
+      const response = await fetch("/api/account/preferences", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(settings),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save preferences")
+      }
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  if (!session) {
+  if (!session || isFetching || !settings) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-muted-foreground">Loading...</p>
+          <p className="mt-2 text-muted-foreground">Loading account settings...</p>
         </div>
       </div>
     )
@@ -131,7 +193,11 @@ export default function AccountPage() {
                 </div>
                 <Switch
                   checked={settings.emailNotifications}
-                  onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, emailNotifications: checked }))}
+                  onCheckedChange={(checked) =>
+                    setSettings((prev) =>
+                      prev ? { ...prev, emailNotifications: checked } : prev,
+                    )
+                  }
                 />
               </div>
 
@@ -144,7 +210,9 @@ export default function AccountPage() {
                 </div>
                 <Switch
                   checked={settings.autoExport}
-                  onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, autoExport: checked }))}
+                  onCheckedChange={(checked) =>
+                    setSettings((prev) => (prev ? { ...prev, autoExport: checked } : prev))
+                  }
                 />
               </div>
 
@@ -154,32 +222,34 @@ export default function AccountPage() {
                 <Label>Preferred Vendors</Label>
                 <p className="text-sm text-muted-foreground">Choose which music vendors to prioritize</p>
                 <div className="space-y-2">
-                  {["Apple Music", "Bandcamp", "Amazon Music", "7digital"].map((vendor) => (
-                    <div key={vendor} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id={vendor}
-                        checked={settings.preferredVendors.includes(vendor)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSettings((prev) => ({
-                              ...prev,
-                              preferredVendors: [...prev.preferredVendors, vendor],
-                            }))
-                          } else {
-                            setSettings((prev) => ({
-                              ...prev,
-                              preferredVendors: prev.preferredVendors.filter((v) => v !== vendor),
-                            }))
-                          }
-                        }}
-                        className="rounded border-border"
-                      />
-                      <Label htmlFor={vendor} className="text-sm font-normal">
-                        {vendor}
-                      </Label>
-                    </div>
-                  ))}
+                  {vendorOptions.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No vendors available yet.</p>
+                  ) : (
+                    vendorOptions.map((vendor) => (
+                      <div key={vendor.id} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={vendor.id}
+                          checked={settings.preferredVendors.includes(vendor.id)}
+                          onChange={(e) => {
+                            setSettings((prev) => {
+                              if (!prev) return prev
+                              return {
+                                ...prev,
+                                preferredVendors: e.target.checked
+                                  ? [...prev.preferredVendors, vendor.id]
+                                  : prev.preferredVendors.filter((v) => v !== vendor.id),
+                              }
+                            })
+                          }}
+                          className="rounded border-border"
+                        />
+                        <Label htmlFor={vendor.id} className="text-sm font-normal">
+                          {vendor.displayName}
+                        </Label>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 

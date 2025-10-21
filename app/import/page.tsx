@@ -78,7 +78,7 @@ export default function ImportPage() {
         localStorage.removeItem("spotify-auth")
       }
     }
-  }, [router])
+  }, [router, session])
 
   const isSpotifyConnected = useMemo(() => {
     return spotifyAuth ? spotifyAuth.expiresAt > Date.now() : false
@@ -180,16 +180,33 @@ export default function ImportPage() {
 
       setImportProgress({ step: "persisting", progress: 75, message: "Saving playlist to your library..." })
 
-      const persistResponse = await fetch("/api/imports", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ playlist: playlistData }),
-      })
+      const persistController = new AbortController()
+      const persistTimeout = window.setTimeout(() => {
+        persistController.abort()
+      }, 20000)
+
+      let persistResponse: Response
+      try {
+        persistResponse = await fetch("/api/imports", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ playlist: playlistData }),
+          signal: persistController.signal,
+        })
+      } catch (persistError) {
+        if ((persistError as DOMException)?.name === "AbortError") {
+          throw new Error("Saving playlist took too long. Please try again in a moment.")
+        }
+        throw persistError
+      } finally {
+        window.clearTimeout(persistTimeout)
+      }
 
       if (!persistResponse.ok) {
         const persistError = await persistResponse.json().catch(() => ({}))
+        console.error("Failed to persist playlist", persistError)
         throw new Error(persistError.error ?? "Failed to save playlist import.")
       }
 

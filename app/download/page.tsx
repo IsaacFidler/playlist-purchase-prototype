@@ -11,6 +11,27 @@ import { Separator } from "@/components/ui/separator"
 import { ArrowLeft, Download, ExternalLink, FileText, Music, CheckCircle, Copy } from "lucide-react"
 import { useSession } from "@supabase/auth-helpers-react"
 
+interface ApiTrack {
+  id: string
+  name: string
+  artist: string
+  album: string
+  duration: string
+  durationMs: number
+  spotifyId: string | null
+  spotifyUrl?: string
+  isrc: string | null
+  orderIndex: number
+  vendors: Array<{
+    id: string
+    name: string
+    vendorId: string
+    url: string
+    price?: string
+    available: boolean
+  }>
+}
+
 interface CompletedPurchase {
   tracks: Array<{
     id: string
@@ -73,8 +94,8 @@ export default function DownloadPage() {
           return
         }
 
-        const trackMap: CompletedPurchase["tracks"] = (playlist.tracks as CompletedPurchase["tracks"]).map(
-          (track: any) => ({
+        const trackMap: CompletedPurchase["tracks"] = (playlist.tracks as ApiTrack[]).map(
+          (track) => ({
             id: track.id,
             name: track.name,
             artist: track.artist,

@@ -21,10 +21,10 @@ export async function GET() {
 export async function POST(request: Request) {
   const supabase = createRouteClient()
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -41,15 +41,33 @@ export async function POST(request: Request) {
   }
 
   try {
+    console.info("[imports] persisting playlist", {
+      userId: user.id,
+      trackCount: parseResult.data.tracks.length,
+      playlistName: parseResult.data.name,
+    })
+    const startTime = Date.now()
     const playlistId = await createPlaylistImport({
-      userId: session.user.id,
-      userEmail: session.user.email,
+      userId: user.id,
+      userEmail: user.email,
       playlist: parseResult.data,
     })
 
+    console.info("[imports] persisted playlist", {
+      playlistId,
+      durationMs: Date.now() - startTime,
+    })
     return NextResponse.json({ id: playlistId }, { status: 201 })
   } catch (error) {
     console.error("Failed to persist playlist import", error)
-    return NextResponse.json({ error: "Failed to persist playlist" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to persist playlist",
+      },
+      { status: 500 },
+    )
   }
 }

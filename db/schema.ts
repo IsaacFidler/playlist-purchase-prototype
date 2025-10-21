@@ -13,7 +13,7 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core"
-import { relations } from "drizzle-orm"
+import { relations, sql } from "drizzle-orm"
 
 export const userRoleEnum = pgEnum("user_role", ["ADMIN", "MEMBER"])
 export const playlistSourceEnum = pgEnum("playlist_source", [
@@ -234,9 +234,27 @@ export const importActivities = pgTable(
   }),
 )
 
-export const profilesRelations = relations(profiles, ({ many }) => ({
+export const userPreferences = pgTable(
+  "user_preferences",
+  {
+    userId: uuid("user_id")
+      .primaryKey()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    emailNotifications: boolean("email_notifications").notNull().default(true),
+    autoExport: boolean("auto_export").notNull().default(false),
+    preferredVendors: text("preferred_vendors").array().notNull().default(sql`'{}'::text[]`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+)
+
+export const profilesRelations = relations(profiles, ({ one, many }) => ({
   spotifyAccounts: many(spotifyAccounts),
   playlistImports: many(playlistImports),
+  preferences: one(userPreferences, {
+    fields: [profiles.id],
+    references: [userPreferences.userId],
+  }),
 }))
 
 export const spotifyAccountsRelations = relations(spotifyAccounts, ({ one }) => ({
@@ -278,5 +296,12 @@ export const importActivitiesRelations = relations(importActivities, ({ one }) =
   playlistImport: one(playlistImports, {
     fields: [importActivities.importId],
     references: [playlistImports.id],
+  }),
+}))
+
+export const userPreferencesRelations = relations(userPreferences, ({ one }) => ({
+  profile: one(profiles, {
+    fields: [userPreferences.userId],
+    references: [profiles.id],
   }),
 }))

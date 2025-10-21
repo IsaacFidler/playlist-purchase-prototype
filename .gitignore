@@ -43,5 +43,5 @@ next-env.d.ts
 # local docs and generated guides
 AGENTS.md
 *.tentaclearchitecturemarkdown
-product-doc.md
-technical-architecture.md
+#product-doc.md
+#technical-architecture.md

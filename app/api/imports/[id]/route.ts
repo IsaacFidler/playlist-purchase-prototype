@@ -7,22 +7,23 @@ export async function GET(
   _request: Request,
   { params }: { params: { id: string } },
 ) {
-  const supabase = createRouteClient()
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+  try {
+    const supabase = createRouteClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
-  const record = await getPlaylistImport({ userId: session.user.id, importId: params.id })
+    const record = await getPlaylistImport({ userId: user.id, importId: params.id })
 
-  if (!record) {
-    return NextResponse.json({ error: "Playlist import not found" }, { status: 404 })
-  }
+    if (!record) {
+      return NextResponse.json({ error: "Playlist import not found" }, { status: 404 })
+    }
 
-  const tracks = record.tracks.map((track) => ({
+    const tracks = record.tracks.map((track) => ({
     id: track.id,
     name: track.name,
     artist: track.artists,
@@ -40,22 +41,32 @@ export async function GET(
       url: offer.externalUrl,
       price:
         offer.priceValue != null
-          ? `${currencySymbol(offer.currencyCode)}${offer.priceValue.toFixed(2)}`
+          ? `${currencySymbol(offer.currencyCode)}${Number(offer.priceValue).toFixed(2)}`
           : undefined,
       available: offer.availability === "AVAILABLE",
     })),
   }))
 
-  return NextResponse.json({
-    id: record.id,
-    name: record.name,
-    description: record.description,
-    status: record.status,
-    url: record.sourceUrl,
-    trackCount: record.totalTracks,
-    importedAt: record.createdAt,
-    tracks,
-  })
+    return NextResponse.json({
+      id: record.id,
+      name: record.name,
+      description: record.description,
+      status: record.status,
+      url: record.sourceUrl,
+      trackCount: record.totalTracks,
+      importedAt: record.createdAt,
+      tracks,
+    })
+  } catch (error) {
+    console.error("[API /api/imports/[id]] Error fetching playlist import:", error)
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Failed to load playlist import",
+        details: error instanceof Error ? error.stack : String(error)
+      },
+      { status: 500 }
+    )
+  }
 }
 
 const formatDuration = (durationMs: number) => {
