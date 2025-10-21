@@ -5,6 +5,8 @@ import { createRouteClient } from "@/lib/supabase-server"
 import { playlistPayloadSchema } from "@/lib/validators/imports"
 import { checkRateLimit, RATE_LIMITS, createRateLimitHeaders } from "@/lib/rate-limit"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const supabase = createRouteClient()
   const {

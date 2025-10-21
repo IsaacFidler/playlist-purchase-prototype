@@ -7,6 +7,8 @@ import {
 import { createRouteClient } from "@/lib/supabase-server"
 import { preferencesSchema } from "@/lib/validators/preferences"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const supabase = createRouteClient()
   const {

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 
+export const dynamic = 'force-dynamic'
+
 const TOKEN_ENDPOINT = process.env.SPOTIFY_TOKEN_ENDPOINT ?? "https://accounts.spotify.com/api/token"
 
 export async function POST(request: Request) {

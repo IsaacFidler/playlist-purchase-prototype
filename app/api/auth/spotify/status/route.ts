@@ -3,6 +3,8 @@ import { NextResponse } from "next/server"
 import { createRouteClient } from "@/lib/supabase-server"
 import { hasSpotifyAccount } from "@/lib/spotify-auth"
 
+export const dynamic = 'force-dynamic'
+
 /**
  * Check if user has a Spotify account connected
  */

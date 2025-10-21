@@ -6,6 +6,8 @@ import { createRouteClient } from "@/lib/supabase-server"
 import { checkRateLimit, RATE_LIMITS, createRateLimitHeaders } from "@/lib/rate-limit"
 import { getSpotifyToken } from "@/lib/spotify-auth"
 
+export const dynamic = 'force-dynamic'
+
 const SPOTIFY_API_BASE = "https://api.spotify.com/v1"
 
 type SpotifyPlaylistResponse = {

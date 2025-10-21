@@ -3,6 +3,8 @@ import { NextResponse } from "next/server"
 import { createRouteClient } from "@/lib/supabase-server"
 import { saveSpotifyToken } from "@/lib/spotify-auth"
 
+export const dynamic = 'force-dynamic'
+
 const TOKEN_ENDPOINT = process.env.SPOTIFY_TOKEN_ENDPOINT ?? "https://accounts.spotify.com/api/token"
 
 export async function POST(request: Request) {

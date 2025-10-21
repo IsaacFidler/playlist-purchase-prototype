@@ -3,6 +3,8 @@ import { NextResponse } from "next/server"
 import { getPlaylistImport } from "@/db/repositories/playlist-imports"
 import { createRouteClient } from "@/lib/supabase-server"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(
   _request: Request,
   { params }: { params: { id: string } },
