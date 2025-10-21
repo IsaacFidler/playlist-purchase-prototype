@@ -1,20 +1,20 @@
-import postgres from "postgres"
-import * as dotenv from "dotenv"
+import * as dotenv from "dotenv";
+import postgres from "postgres";
 
-dotenv.config({ path: ".env.local" })
+dotenv.config({ path: ".env.local" });
 
-const DATABASE_URL = process.env.DATABASE_URL
+const DATABASE_URL = process.env.DATABASE_URL;
 
 if (!DATABASE_URL) {
-  console.error("❌ DATABASE_URL environment variable is not set")
-  process.exit(1)
+  console.error("❌ DATABASE_URL environment variable is not set");
+  process.exit(1);
 }
 
 async function verifyRLS() {
-  const client = postgres(DATABASE_URL, { max: 1 })
+  const client = postgres(DATABASE_URL!, { max: 1 });
 
   try {
-    console.log("🔍 Checking RLS policies...")
+    console.log("🔍 Checking RLS policies...");
 
     // Check if RLS is enabled on tables
     const rlsStatus = await client`
@@ -25,13 +25,13 @@ async function verifyRLS() {
                          'playlist_tracks', 'vendor_offers', 'import_activities',
                          'user_preferences')
       ORDER BY tablename
-    `
+    `;
 
-    console.log("\n📋 RLS status for tables:")
+    console.log("\n📋 RLS status for tables:");
     rlsStatus.forEach((table) => {
-      const status = table.rowsecurity ? "✅ ENABLED" : "❌ DISABLED"
-      console.log(`  ${table.tablename}: ${status}`)
-    })
+      const status = table.rowsecurity ? "✅ ENABLED" : "❌ DISABLED";
+      console.log(`  ${table.tablename}: ${status}`);
+    });
 
     // Count policies
     const policies = await client`
@@ -39,34 +39,36 @@ async function verifyRLS() {
       FROM pg_policies
       WHERE schemaname = 'public'
       ORDER BY tablename, policyname
-    `
+    `;
 
-    console.log(`\n📜 Total RLS policies: ${policies.length}`)
+    console.log(`\n📜 Total RLS policies: ${policies.length}`);
 
-    const policyCount = policies.reduce((acc, p) => {
-      acc[p.tablename] = (acc[p.tablename] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
+    const policyCount = policies.reduce(
+      (acc, p) => {
+        acc[p.tablename] = (acc[p.tablename] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
-    console.log("\n📊 Policies per table:")
+    console.log("\n📊 Policies per table:");
     Object.entries(policyCount).forEach(([table, count]) => {
-      console.log(`  ${table}: ${count} policies`)
-    })
+      console.log(`  ${table}: ${count} policies`);
+    });
 
     // Check migration was tracked
     const migrations = await client`
       SELECT * FROM drizzle.__drizzle_migrations ORDER BY id
-    `
+    `;
 
-    console.log(`\n✅ Tracked migrations: ${migrations.length}`)
-    console.log("   (Expecting 3: 0000, 0001, and 0002)")
-
+    console.log(`\n✅ Tracked migrations: ${migrations.length}`);
+    console.log("   (Expecting 3: 0000, 0001, and 0002)");
   } catch (error) {
-    console.error("❌ Error verifying RLS:", error)
-    process.exit(1)
+    console.error("❌ Error verifying RLS:", error);
+    process.exit(1);
   } finally {
-    await client.end()
+    await client.end();
   }
 }
 
-verifyRLS()
+verifyRLS();
