@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 
 import { findITunesOffer, formatITunesPrice } from "@/lib/vendors/apple"
 import { findDiscogsOffer, formatDiscogsPrice } from "@/lib/vendors/discogs"
+import { createRouteClient } from "@/lib/supabase-server"
+import { checkRateLimit, RATE_LIMITS, createRateLimitHeaders } from "@/lib/rate-limit"
+import { getSpotifyToken } from "@/lib/spotify-auth"
 
 const SPOTIFY_API_BASE = "https://api.spotify.com/v1"
 
@@ -28,10 +31,53 @@ type SpotifyPlaylistTrack = {
 }
 
 export async function POST(request: Request) {
-  const { playlistUrl, accessToken } = await request.json()
+  // 1. Authentication check
+  const supabase = createRouteClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  if (!playlistUrl || !accessToken) {
-    return NextResponse.json({ error: "Playlist URL and access token are required." }, { status: 400 })
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  // 2. Rate limiting check
+  const rateLimitResult = checkRateLimit(user.id, RATE_LIMITS.SPOTIFY_PLAYLIST)
+  const rateLimitHeaders = createRateLimitHeaders(rateLimitResult)
+
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      {
+        error: "Rate limit exceeded. Please try again later.",
+        retryAfter: rateLimitResult.retryAfter,
+      },
+      {
+        status: 429,
+        headers: rateLimitHeaders,
+      }
+    )
+  }
+
+  // 3. Parse and validate request body
+  const { playlistUrl } = await request.json()
+
+  if (!playlistUrl) {
+    return NextResponse.json(
+      { error: "Playlist URL is required." },
+      { status: 400, headers: rateLimitHeaders }
+    )
+  }
+
+  // 4. Get user's Spotify access token from database
+  const accessToken = await getSpotifyToken(user.id)
+
+  if (!accessToken) {
+    return NextResponse.json(
+      {
+        error: "Spotify account not connected or token expired. Please reconnect your Spotify account.",
+      },
+      { status: 401, headers: rateLimitHeaders }
+    )
   }
 
   const playlistId = extractPlaylistId(playlistUrl)
@@ -97,7 +143,7 @@ export async function POST(request: Request) {
     tracks: normalizedTracks,
   }
 
-  return NextResponse.json(payload)
+  return NextResponse.json(payload, { headers: rateLimitHeaders })
 }
 
 type TrackWithVendors = {

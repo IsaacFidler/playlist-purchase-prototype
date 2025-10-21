@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -22,38 +22,13 @@ interface ImportProgress {
   message: string
 }
 
-interface SpotifyAuthPayload {
-  accessToken: string
-  refreshToken?: string
-  tokenType: string
-  expiresAt: number
-  scope: string
-}
-
-const TOKEN_EXPIRY_BUFFER_MS = 60 * 1000
-
-function loadSpotifyAuth(): SpotifyAuthPayload | null {
-  const storedAuth = typeof window !== "undefined" ? localStorage.getItem("spotify-auth") : null
-  if (!storedAuth) return null
-  try {
-    return JSON.parse(storedAuth) as SpotifyAuthPayload
-  } catch (error) {
-    console.warn("Failed to parse stored Spotify session", error)
-    localStorage.removeItem("spotify-auth")
-    return null
-  }
-}
-
-function persistSpotifyAuth(payload: SpotifyAuthPayload) {
-  localStorage.setItem("spotify-auth", JSON.stringify(payload))
-}
-
 export default function ImportPage() {
   const [playlistUrl, setPlaylistUrl] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [spotifyAuth, setSpotifyAuth] = useState<SpotifyAuthPayload | null>(null)
+  const [isSpotifyConnected, setIsSpotifyConnected] = useState(false)
+  const [checkingSpotify, setCheckingSpotify] = useState(true)
   const router = useRouter()
   const session = useSession()
 
@@ -63,33 +38,24 @@ export default function ImportPage() {
       return
     }
 
-    const storedAuth = loadSpotifyAuth()
-    if (storedAuth) {
-      if (storedAuth.expiresAt <= Date.now() + TOKEN_EXPIRY_BUFFER_MS && storedAuth.refreshToken) {
-        refreshSpotifyAccessToken(storedAuth.refreshToken, storedAuth)
-          .then((updated) => setSpotifyAuth(updated))
-          .catch((error) => {
-            console.error("Failed to refresh Spotify token", error)
-            localStorage.removeItem("spotify-auth")
-          })
-      } else if (storedAuth.expiresAt > Date.now()) {
-        setSpotifyAuth(storedAuth)
-      } else {
-        localStorage.removeItem("spotify-auth")
+    // Check if user has Spotify connected
+    const checkSpotifyStatus = async () => {
+      try {
+        setCheckingSpotify(true)
+        const response = await fetch("/api/auth/spotify/status")
+        if (response.ok) {
+          const data = await response.json()
+          setIsSpotifyConnected(data.connected)
+        }
+      } catch (error) {
+        console.error("Failed to check Spotify status", error)
+      } finally {
+        setCheckingSpotify(false)
       }
     }
+
+    checkSpotifyStatus()
   }, [router, session])
-
-  const isSpotifyConnected = useMemo(() => {
-    return spotifyAuth ? spotifyAuth.expiresAt > Date.now() : false
-  }, [spotifyAuth])
-
-  const tokenExpiresInMinutes = useMemo(() => {
-    if (!spotifyAuth) return null
-    const diff = spotifyAuth.expiresAt - Date.now()
-    if (diff <= 0) return 0
-    return Math.round(diff / 60000)
-  }, [spotifyAuth])
 
   const isValidSpotifyUrl = (url: string) => {
     const spotifyRegex = /^https:\/\/open\.spotify\.com\/playlist\/[a-zA-Z0-9]+(\?.*)?$/
@@ -116,33 +82,9 @@ export default function ImportPage() {
       return
     }
 
-    if (!isSpotifyConnected || !spotifyAuth) {
+    if (!isSpotifyConnected) {
       setError("Connect your Spotify account before importing a playlist.")
       return
-    }
-
-    let activeAuth = spotifyAuth
-
-    if (spotifyAuth.expiresAt <= Date.now() + TOKEN_EXPIRY_BUFFER_MS) {
-      if (!spotifyAuth.refreshToken) {
-        setSpotifyAuth(null)
-        localStorage.removeItem("spotify-auth")
-        setError("Your Spotify session expired and cannot be refreshed. Please reconnect.")
-        return
-      }
-
-      try {
-        setImportProgress({ step: "refreshing", progress: 10, message: "Refreshing Spotify session..." })
-        activeAuth = await refreshSpotifyAccessToken(spotifyAuth.refreshToken, spotifyAuth)
-        setSpotifyAuth(activeAuth)
-      } catch (err) {
-        console.error(err)
-        setSpotifyAuth(null)
-        localStorage.removeItem("spotify-auth")
-        setError(err instanceof Error ? err.message : "Unable to refresh Spotify session.")
-        setImportProgress(null)
-        return
-      }
     }
 
     setIsLoading(true)
@@ -155,13 +97,21 @@ export default function ImportPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ playlistUrl, accessToken: activeAuth.accessToken }),
+        body: JSON.stringify({ playlistUrl }),
       })
 
       if (response.status === 401) {
-        localStorage.removeItem("spotify-auth")
-        setSpotifyAuth(null)
+        setIsSpotifyConnected(false)
         throw new Error("Spotify session expired. Please reconnect and try again.")
+      }
+
+      if (response.status === 429) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(
+          data.retryAfter
+            ? `Rate limit exceeded. Please try again in ${data.retryAfter} seconds.`
+            : "Too many requests. Please try again in a few minutes."
+        )
       }
 
       if (!response.ok) {
@@ -204,6 +154,15 @@ export default function ImportPage() {
         window.clearTimeout(persistTimeout)
       }
 
+      if (persistResponse.status === 429) {
+        const data = await persistResponse.json().catch(() => ({}))
+        throw new Error(
+          data.retryAfter
+            ? `Too many imports. Please try again in ${Math.ceil(data.retryAfter / 60)} minutes.`
+            : "Too many imports. Please try again later."
+        )
+      }
+
       if (!persistResponse.ok) {
         const persistError = await persistResponse.json().catch(() => ({}))
         console.error("Failed to persist playlist", persistError)
@@ -226,7 +185,7 @@ export default function ImportPage() {
     }
   }
 
-  if (!session) {
+  if (!session || checkingSpotify) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -263,9 +222,7 @@ export default function ImportPage() {
               </p>
               <p className="text-xs text-muted-foreground">
                 {isSpotifyConnected
-                  ? tokenExpiresInMinutes !== null
-                    ? `Access token expires in ~${tokenExpiresInMinutes} minute${tokenExpiresInMinutes === 1 ? "" : "s"}.`
-                    : "Access token active."
+                  ? "Your Spotify account is connected and tokens are securely stored."
                   : "We use Spotify to read playlist tracks securely."}
               </p>
             </div>
@@ -411,36 +368,4 @@ export default function ImportPage() {
       </Card>
     </div>
   )
-}
-
-async function refreshSpotifyAccessToken(refreshToken: string, currentAuth: SpotifyAuthPayload) {
-  const response = await fetch("/api/auth/refresh", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ refreshToken }),
-  })
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}))
-    throw new Error(data.error ?? "Failed to refresh Spotify token.")
-  }
-
-  const data = await response.json()
-
-  const updatedAuth: SpotifyAuthPayload = {
-    ...currentAuth,
-    accessToken: data.access_token,
-    expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000,
-    scope: data.scope ?? currentAuth.scope,
-  }
-
-  if (data.refresh_token) {
-    updatedAuth.refreshToken = data.refresh_token
-  }
-
-  persistSpotifyAuth(updatedAuth)
-
-  return updatedAuth
 }

@@ -8,11 +8,8 @@ import { consumeSpotifyPkceState } from "@/lib/spotify"
 import { Button } from "@/components/ui/button"
 
 type TokenResponse = {
-  access_token: string
-  token_type: string
-  scope: string
-  expires_in: number
-  refresh_token?: string
+  success: boolean
+  message: string
 }
 
 export default function SpotifyCallbackPage() {
@@ -46,19 +43,6 @@ export default function SpotifyCallbackPage() {
     const { codeVerifier, state: storedState } = consumeSpotifyPkceState()
 
     if (!codeVerifier) {
-      try {
-        const existingAuth = localStorage.getItem("spotify-auth")
-        if (existingAuth) {
-          setStatusMessage("Spotify already connected. Redirecting...")
-          setTimeout(() => {
-            router.replace("/import")
-          }, 500)
-          return
-        }
-      } catch (storageError) {
-        console.warn("Unable to read existing Spotify auth", storageError)
-      }
-
       setError("Unable to validate the authorization response. Please restart the connection flow.")
       return
     }
@@ -89,20 +73,15 @@ export default function SpotifyCallbackPage() {
 
         const data = (await response.json()) as TokenResponse
 
-        const authPayload = {
-          accessToken: data.access_token,
-          refreshToken: data.refresh_token,
-          tokenType: data.token_type,
-          scope: data.scope,
-          expiresAt: Date.now() + data.expires_in * 1000,
+        if (data.success) {
+          setStatusMessage("Spotify connected. Redirecting...")
+
+          setTimeout(() => {
+            router.replace("/import")
+          }, 800)
+        } else {
+          throw new Error("Failed to save Spotify credentials")
         }
-
-        localStorage.setItem("spotify-auth", JSON.stringify(authPayload))
-        setStatusMessage("Spotify connected. Redirecting...")
-
-        setTimeout(() => {
-          router.replace("/import")
-        }, 800)
       } catch (err) {
         console.error(err)
         setError(err instanceof Error ? err.message : "Failed to complete Spotify authorization.")
