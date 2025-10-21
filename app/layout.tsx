@@ -8,6 +8,8 @@ import { DynamicLayout } from "@/components/dynamic-layout"
 import { SupabaseProvider } from "@/components/providers/supabase-provider"
 import { createServerClient } from "@/lib/supabase-server"
 
+export const dynamic = 'force-dynamic'
+
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",

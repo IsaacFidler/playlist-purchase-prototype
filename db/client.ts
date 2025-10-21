@@ -34,14 +34,4 @@ export function getDb() {
   return dbInstance
 }
 
-/**
- * @deprecated Use getDb() instead to ensure lazy loading
- * This export is kept for backward compatibility but will be removed
- */
-export const db = new Proxy({} as PostgresJsDatabase<typeof schema>, {
-  get(_target, prop) {
-    return (getDb() as any)[prop]
-  },
-})
-
 export type DbClient = PostgresJsDatabase<typeof schema>
