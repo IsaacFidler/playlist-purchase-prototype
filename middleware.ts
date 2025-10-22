@@ -13,24 +13,39 @@ import type { NextRequest } from "next/server"
 
 export async function middleware(req: NextRequest) {
   try {
+    console.log('[middleware] Request received:', req.nextUrl.pathname)
     const res = NextResponse.next()
 
     // Check for required Supabase environment variables
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    console.log('[middleware] Env check:', {
+      hasUrl: !!supabaseUrl,
+      hasKey: !!supabaseKey,
+      url: supabaseUrl ? `${supabaseUrl.slice(0, 20)}...` : 'missing'
+    })
+
+    if (!supabaseUrl || !supabaseKey) {
       console.error('[middleware] Missing required Supabase environment variables')
       console.error('Required: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY')
       // Allow request through but log error - prevents complete site failure
       return res
     }
 
+    console.log('[middleware] Creating Supabase client...')
     const supabase = createMiddlewareClient({ req, res })
+    console.log('[middleware] Supabase client created successfully')
 
     // Get the current session
+    console.log('[middleware] Getting session...')
     const {
       data: { session },
     } = await supabase.auth.getSession()
+    console.log('[middleware] Session retrieved:', { hasSession: !!session })
 
     const { pathname } = req.nextUrl
+    console.log('[middleware] Processing pathname:', pathname)
 
     // Define protected routes that require authentication
     const protectedRoutes = [
@@ -66,9 +81,15 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
 
+    console.log('[middleware] Request processed successfully')
     return res
   } catch (error) {
-    console.error('[middleware] Error:', error)
+    console.error('[middleware] Error caught:', error)
+    console.error('[middleware] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined
+    })
     // Return the response to prevent complete failure
     return NextResponse.next()
   }
