@@ -19,6 +19,10 @@ export const metadata: Metadata = {
   title: "Playlist Purchase Prototype",
   description: "Turn your playlists into purchasable music collections",
   generator: "v0.app",
+  icons: {
+    icon: "/pplogo.png",
+    apple: "/pplogo.png",
+  },
 }
 
 export default async function RootLayout({
